@@ -9,7 +9,9 @@
 | | |
 | --- | --- |
 | ![同名冲突](docs/screenshots/conflict-dark.png) | ![本机导入](docs/screenshots/local-light.png) |
-| 装之前把四种坏法说清楚 | 把 DSH 看不见的技能导进来 |
+| **装之前把四种坏法说清楚** — 占名、缺件、不完整、名字不合法，各配自己的后果与选项 | **把 DSH 看不见的技能导进来** — 扫描 Claude Code / Codex / Agents / Gemini 的目录 |
+| ![已安装](docs/screenshots/installed-light.png) | ![深色主题](docs/screenshots/browse-dark.png) |
+| **装完之后看得见的状态** — 来路、更新检查与回收站 | **跟随 DSH 主题** — 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
 
 - **发现** — 聚合 5 个来源的技能目录，支持中英文关键词、分类、排序、分页
 - **已安装** — 直接读你本机的 `~/.dsh/skills`，显示每个技能的来源、文件数与校验结果
