@@ -1,0 +1,9 @@
+# Normalize to LF in the repository and in the working tree, so a Windows
+# checkout and a Linux checkout produce identical bytes and identical diffs.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
