@@ -2,6 +2,10 @@
 
 一个 [DeepSeek Harness](https://github.com/deepseek-ai) 插件：在 Web GUI 里浏览、搜索、预览并安装**全世界公开的 Agent Skills**。
 
+```powershell
+dsh plugin --profile <你的 profile> add dsh-skill-center
+```
+
 装上之后侧边栏底部会多出一个「技能中心」按钮：
 
 ![浏览技能](docs/screenshots/browse-light.png)
@@ -49,26 +53,32 @@
 
 ## 安装
 
-先拿到仓库：
+```powershell
+dsh plugin --profile <你的 profile> add dsh-skill-center
+```
+
+包名会从 npm 上解析，和你装任何别的 DSH 插件是同一条路。桌面版自带 CLI 的路径随安装位置变化，
+Windows 上在 `<安装目录>\resources\runtime\cli\bin\dsh.cmd`。
+
+想改用源码（要改代码、或想跑本仓库里那套检查）：
 
 ```bash
 git clone https://github.com/tuoLuoSuan/dsh-skill-center.git
-```
-
-再把它加进你的 profile。桌面版自带 CLI（路径随安装位置变化，Windows 上在
-`<安装目录>\resources\runtime\cli\bin\dsh.cmd`）：
-
-```powershell
 dsh plugin --profile <你的 profile> add "<仓库路径>"
 ```
 
 > **`--profile desktop` 会被普通 CLI 拒绝**（`profile "desktop" is managed exclusively by
 > the Electron application`）。要让桌面版自己的 profile 生效，得用上面那条 Electron 附带的
-> `dsh.cmd`，或者直接在应用内的插件管理界面里添加本地路径。
+> `dsh.cmd`，或者直接在应用内的插件管理界面里添加。
 
 只要 profile 的 `package.json` 里 `dsh.profile.bundles` 有了本插件，且 `cordis.patch.yml`
 是**纯 insert**（本仓库就是），就能热挂载，**不需要重启**。此后客户端代码改动同样热重载（刷新页面即可）；
 `lib/` 下的宿主代码改动仍需要重启。
+
+本包**没有任何运行时依赖**——`dependencies` 是空的，装下去的就是 `lib/`、`client/`、`locale/`
+和两个清单文件，加起来 21 个文件 / 286 KB 解包后。对 `@deepseek-ai/dsh` 的依赖写在
+`peerDependencies` 里（`>=0.2.0-rc.2`）并且标了 `optional`：它是一道**版本门禁**而不是要去安装的东西——
+DSH 读这个字段来判断插件和当前运行时兼不兼容，pnpm 则因为 `optional` 不会去装第二份宿主。
 
 ### 怎么确认装上了
 
@@ -78,7 +88,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 2. 点开抽屉后，**左下角「发现」标签页里的来源轨**应当列出 5 个来源。**如果它报「宿主代码还是旧版本」，说明宿主那一半没加载**——`lib/` 是宿主代码，加完插件要重启一次 DeepSeek Harness，之后改 `client/` 才只需要刷新页面。
 3. 面板底部的条数**必须是实时数**。这个数来自 `GET /dsh-skill-center/api/sources`，不写死；如果你看到的是 0 或一直转圈，是上游没连上，不是装错了——在浏览器里直接开 `http://127.0.0.1:<端口>/dsh-skill-center/api/sources` 就能看到原始 JSON 和真实错误。
 
-`0.2.0-rc.2` 上验证过。更低版本可能缺少本插件依赖的插槽（见「兼容性」）。
+`0.2.0-rc.2` 上验证过。更低版本会被上面那道版本门禁拦住（见「兼容性」）。
 
 ---
 
@@ -164,6 +174,8 @@ node docs/check-published.mjs  # 陌生人此刻在 GitHub 上看到的到底是
 node docs/look-at-page.mjs     # 上面那一页渲染出来好不好看（读 HTML，不是 API）
 node docs/shot-page.mjs        # 把那一页真的截一张图下来，自己看一眼
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
+node docs/probe-npm-install.mjs  # 把打包产物装进一个用完就删的 profile，验证 npm 路径能用
+                                 # （不带参数时读当前目录下的 .tgz，先 npm pack 一个）
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
@@ -187,6 +199,12 @@ node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
 "git 没装"；把子进程输出接进管道需要一个具名管道，而沙箱会拒绝，失败以 `result.error`
 上的 EPERM 抵达、stdout 为空——与"运行成功但没输出"无法区分。所以它用
 `stdio: 'inherit'`，并在 `result.error` 上显式报错。）
+
+`dsh.cmd` 是一层两行的壳，真正的可执行文件是 Electron 自己（`ELECTRON_RUN_AS_NODE=1` 加一段
+asar 里的 JS）。`probe-npm-install.mjs` 直接调那个二进制而不是 `.cmd`——Node 拒绝在没有 shell 的
+情况下 spawn `.cmd`（`EINVAL`），而走 shell 就要给一个含空格的路径加引号。它顺便回答一个
+发布前必须问的问题：**宿主拿到的是一个插件，还是第二份它自己**（后者正是 `@deepseek-ai/dsh`
+写进 `peerDependencies` 的副作用，所以那一项标了 `optional`）。
 
 改动 `lib/` 下的宿主代码后需要**重启 harness** 才生效；`client/client.js` 由
 `@deepseek-ai/dsh-client-hmr` 轮询热重载，保存即可看到。

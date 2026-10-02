@@ -34,6 +34,10 @@
     "README.md",
     "LICENSE"
   ],
+  "scripts": {
+    "test": "node docs/smoke-host.mjs && node docs/smoke-client.mjs && node docs/check-classes.mjs",
+    "prepublishOnly": "node docs/audit-publish.mjs"
+  },
   "exports": {
     ".": {
       "default": "./lib/index.js"
@@ -53,6 +57,17 @@
       ],
       "platform": "web"
     }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "engines": {
     "node": ">=20"
