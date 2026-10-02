@@ -104,4 +104,7 @@ console.log(
 )
 console.log(`removing ${scratch}`)
 rmSync(scratch, { recursive: true, force: true })
-process.exit(failed === 0 ? 0 : 1)
+// Set exitCode rather than calling process.exit: this process has spawned
+// children, and exiting out from under their closing handles trips an
+// assertion in uv's async close on Windows.
+process.exitCode = failed === 0 ? 0 : 1

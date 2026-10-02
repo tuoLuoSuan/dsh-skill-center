@@ -75,4 +75,7 @@ console.log(
     ? '\nAll checks passed. This is safe to hand to somebody.'
     : `\n${failed} check(s) failed.`,
 )
-process.exit(failed === 0 ? 0 : 1)
+// Set exitCode rather than calling process.exit: fetch keeps libuv handles
+// open while it tears down, and exiting underneath them trips an assertion in
+// uv's async close on Windows -- a scary crash message on a run that passed.
+process.exitCode = failed === 0 ? 0 : 1
