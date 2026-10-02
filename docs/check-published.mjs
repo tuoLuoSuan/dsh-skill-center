@@ -49,7 +49,13 @@ check('no generated theme is published', !names.includes('theme.css'))
 // The README is the only thing most people will read, so its images have to
 // load from GitHub's own raw host rather than from a path that only resolves
 // on a case-insensitive filesystem.
-const readme = await (await fetch(`https://raw.githubusercontent.com/${REPO}/${BRANCH}/README.md`)).text()
+//
+// Read through the contents API rather than raw.githubusercontent.com: raw is
+// served through a CDN that keeps serving the previous revision for a few
+// minutes after a push, so a check run right after one would grade the commit
+// before last.
+const readmeEntry = await api(`/contents/README.md?ref=${BRANCH}`)
+const readme = Buffer.from(readmeEntry.content, 'base64').toString('utf8')
 check('the README is served as UTF-8 Chinese', readme.includes('技能中心'))
 check('the README says what DSH version this targets', readme.includes('0.2.0-rc.2'))
 

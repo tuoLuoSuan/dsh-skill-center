@@ -160,6 +160,7 @@ node docs/check-sorts.mjs      # 各源的排序键是否真的排了序（需�
 node docs/preview.mjs          # 把真实 bundle 渲染成 HTML，再用 Chrome 无头截图
 node docs/preview.mjs --no-shot
 node docs/audit-publish.mjs    # 发布前自检：账号名残留与写死的绝对路径
+node docs/check-published.mjs  # 陌生人此刻在 GitHub 上看到的到底是什么（需要 gh 登录）
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
