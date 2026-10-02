@@ -148,6 +148,7 @@ node docs/check-sorts.mjs      # 各源的排序键是否真的排了序（需�
 node docs/preview.mjs          # 把真实 bundle 渲染成 HTML，再用 Chrome 无头截图
 node docs/preview.mjs --no-shot
 node docs/audit-publish.mjs    # 发布前自检：账号名残留与写死的绝对路径
+node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
@@ -162,6 +163,15 @@ node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
 **没有提交进仓库**（`node docs/theme-tokens.mjs`、`node docs/extract-slot-catalog.mjs`
 可以对着你自己的安装重新生成）——所以全新 clone 直接跑 `preview.mjs` 之前，先跑一次
 `theme-tokens.mjs`。
+
+`docs/verify-clone.mjs` 就是把上面这件事反过来验一遍：它 clone 一份公开仓库到临时目录，
+跑一遍裸 clone 上应当通过的检查，确认没有哪个文件只存在于作者的机器上（生成的产物忘了提交、
+只在本机存在的路径、假设了兄弟目录的脚本）。**它检验的是「别人拿到这个仓库能不能用」，不是
+「作者的机器上能不能用」**——两件事不一样，这个脚本存在的唯一理由就是它们不一样。
+（它自己踩过两个坑：`spawnSync` 的 `cwd` 指向尚未创建的目录会报 `ENOENT`，看起来像
+"git 没装"；把子进程输出接进管道需要一个具名管道，而沙箱会拒绝，失败以 `result.error`
+上的 EPERM 抵达、stdout 为空——与"运行成功但没输出"无法区分。所以它用
+`stdio: 'inherit'`，并在 `result.error` 上显式报错。）
 
 改动 `lib/` 下的宿主代码后需要**重启 harness** 才生效；`client/client.js` 由
 `@deepseek-ai/dsh-client-hmr` 轮询热重载，保存即可看到。
