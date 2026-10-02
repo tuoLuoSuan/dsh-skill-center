@@ -162,6 +162,7 @@ node docs/preview.mjs --no-shot
 node docs/audit-publish.mjs    # 发布前自检：账号名残留与写死的绝对路径
 node docs/check-published.mjs  # 陌生人此刻在 GitHub 上看到的到底是什么（读 API）
 node docs/look-at-page.mjs     # 上面那一页渲染出来好不好看（读 HTML，不是 API）
+node docs/shot-page.mjs        # 把那一页真的截一张图下来，自己看一眼
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
