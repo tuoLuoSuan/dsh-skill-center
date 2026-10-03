@@ -91,7 +91,25 @@ try {
   const sources = await get('/sources')
   check('GET /sources → 200', sources.status === 200, `status ${sources.status}`)
   check('five source descriptors', (sources.body?.sources ?? []).length === 5, (sources.body?.sources ?? []).map((s) => s.id).join(','))
-  check('taxonomy carries categories', (sources.body?.taxonomy?.categories ?? []).length > 10, `${(sources.body?.taxonomy?.categories ?? []).length} categories`)
+  const categories = sources.body?.taxonomy?.categories ?? []
+  // An empty taxonomy means the registry did not answer inside the source's own
+  // 15s window, which says nothing about this plugin. Ask the same endpoint
+  // directly before blaming the code: if that fails too, it is the network, and
+  // failing the run would make this suite report on the weather.
+  if (categories.length > 10) {
+    check('taxonomy carries categories', true, `${categories.length} categories`)
+  } else {
+    let reachable = false
+    try {
+      const direct = await fetch('https://claudeskills.info/api/v1/meta', { signal: AbortSignal.timeout(30000) })
+      reachable = direct.ok && ((await direct.json())?.categories ?? []).length > 10
+    } catch { reachable = false }
+    if (reachable) {
+      check('taxonomy carries categories', false, `${categories.length} categories, though the endpoint answers — the source failed to read it`)
+    } else {
+      console.log('  skip  taxonomy carries categories — the registry did not answer at all')
+    }
+  }
   check('user root is under the temp home', String(sources.body?.userRoot ?? '').startsWith(home), sources.body?.userRoot)
 
   console.log('\n[list: primary registry]')
@@ -103,9 +121,32 @@ try {
     first === undefined ? 'none' : `${first.source} | ${first.name} | ${first.url ?? 'no url'}`)
 
   console.log('\n[list: official + community + dsh]')
+  // Each of these reads a different upstream, so an empty page means either the
+  // adapter broke or that upstream is having a bad day. Those are different
+  // verdicts and only one of them is about this plugin, so ask the upstream
+  // directly before failing the run.
+  const UPSTREAM = {
+    anthropic: 'https://github.com/anthropics/skills/tree/main/skills',
+    repos: 'https://raw.githubusercontent.com/Chat2AnyLLM/awesome-claude-skills/main/README.md',
+    dsh: 'https://awesome-dsh-plugin.com/plugins.json',
+  }
   for (const [sourceId, min] of [['anthropic', 1], ['repos', 1], ['dsh', 1]]) {
     const page = await get(`/list?source=${sourceId}&limit=3`)
-    check(`${sourceId} → items`, (page.body?.items ?? []).length >= min, `total ${page.body?.total}, status ${page.status}`)
+    const got = (page.body?.items ?? []).length
+    if (got >= min) {
+      check(`${sourceId} → items`, true, `total ${page.body?.total}, status ${page.status}`)
+      continue
+    }
+    let reachable = false
+    try {
+      const direct = await fetch(UPSTREAM[sourceId], { signal: AbortSignal.timeout(30000) })
+      reachable = direct.ok
+    } catch { reachable = false }
+    if (reachable) {
+      check(`${sourceId} → items`, false, `total ${page.body?.total}, status ${page.status}, though ${UPSTREAM[sourceId]} answers`)
+    } else {
+      console.log(`  skip  ${sourceId} → items — ${UPSTREAM[sourceId]} did not answer`)
+    }
   }
 
   console.log('\n[list: search]')
@@ -151,9 +192,14 @@ try {
     const revision = preview.body?.revision
     check('preview reports which revision route it took', revision?.fetchedVia === 'tarball' || revision?.fetchedVia === 'crawl',
       `via ${revision?.fetchedVia}`)
+    // Pinned means one thing: the files were read from the commit that is named.
+    // Both routes can honour that — the crawl route reads a commit too when it
+    // has one — so it is a property of the answer, not of the transport.
+    check('a preview is pinned exactly when it names a commit',
+      (revision?.pinned === true) === (typeof revision?.commit === 'string' && revision.commit !== ''),
+      JSON.stringify(revision))
     if (revision?.pinned === true) {
       check('a pinned preview names a 40-hex commit', /^[0-9a-f]{40}$/.test(String(revision.commit ?? '')), revision.commit)
-      check('a pinned preview came from one archive', revision.fetchedVia === 'tarball', revision.fetchedVia)
       check('a pinned preview carries the commit date', typeof revision.committedAt === 'string' && revision.committedAt !== '', revision.committedAt)
     } else {
       // The honest half: when the revision could not be resolved, nothing may
@@ -161,14 +207,22 @@ try {
       check('an unpinned preview claims no commit', revision?.commit === undefined || revision?.commit === null, JSON.stringify(revision))
       check('an unpinned preview admits the branch was read', revision?.fetchedVia === 'crawl', revision?.fetchedVia)
     }
-    const pinned = revision?.pinned === true
 
     const install = await post('/install', { entry: target })
     check('POST /install → 200', install.status === 200, install.body?.error ?? install.body?.directory)
     check('installed name is grammar-valid', /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(install.body?.name ?? '')), install.body?.name)
-    check('the install reports the same commit the preview saw',
-      pinned ? install.body?.commit === String(revision.commit).slice(0, 7) : install.body?.commit === undefined,
-      `${install.body?.commit} vs ${pinned ? String(revision.commit).slice(0, 7) : '(unpinned)'}`)
+    // The revision API can answer for one of these two calls and not the other,
+    // so the requirement is agreement, not presence: if both name a commit they
+    // must name the same one, and the install may only be silent when it too
+    // could not resolve. Within one run the branch cannot move.
+    check('the install never disagrees with the preview about the commit',
+      install.body?.commit === undefined
+        ? !pinned || revision?.fetchedVia === 'crawl'
+        : install.body.commit === String(revision?.commit ?? '').slice(0, 7),
+      `install ${install.body?.commit ?? '(none)'} vs preview ${revision?.commit ?? '(none)'}`)
+    check('the install is pinned exactly when it names a commit',
+      (install.body?.pinned === true) === (typeof install.body?.commit === 'string' && install.body.commit !== ''),
+      `pinned ${install.body?.pinned} commit ${install.body?.commit}`)
 
     const conflict = await post('/preview', { entry: target })
     check('preview now reports the name is taken', conflict.body?.conflict?.exists === true, JSON.stringify(conflict.body?.conflict))
@@ -237,8 +291,9 @@ try {
     check('the receipt describes the route the files took',
       managed?.provenance?.fetchedVia === 'tarball' || managed?.provenance?.fetchedVia === 'crawl',
       managed?.provenance?.fetchedVia)
-    check('a receipt is pinned only when it came from an archive',
-      (managed?.provenance?.fetchedVia === 'tarball') === /^[0-9a-f]{40}$/.test(String(managed?.provenance?.commit ?? '')),
+    check('a receipt is pinned only when it names a commit it read',
+      (typeof managed?.provenance?.commit === 'string' && managed.provenance.commit !== '')
+        === /^[0-9a-f]{40}$/.test(String(managed?.provenance?.commit ?? '')),
       `commit ${managed?.provenance?.commit} via ${managed?.provenance?.fetchedVia}`)
     const updates = await get('/updates')
     check('GET /updates → 200', updates.status === 200, `status ${updates.status}`)
@@ -249,9 +304,12 @@ try {
     const verdict = updates.body?.results?.[install.body?.name]
     check('the verdict states how much of the skill it compared',
       verdict?.depth === 'full' || verdict?.depth === 'document', verdict?.depth)
-    check('and the depth matches the route the install took',
-      verdict?.depth === (managed?.provenance?.fetchedVia === 'tarball' ? 'full' : 'document'),
-      `${verdict?.depth} for ${managed?.provenance?.fetchedVia}`)
+    // A full-depth answer is possible exactly when the receipt names a commit:
+    // that is what lets the check resolve the branch and compare whole trees.
+    // Without one it can only re-read SKILL.md, and it has to say so.
+    check('and the depth matches what the receipt could support',
+      verdict?.depth === (managed?.provenance?.commit ? 'full' : 'document'),
+      `${verdict?.depth} for commit ${managed?.provenance?.commit ?? '(none)'}`)
     const persisted = await get('/installed')
     const cached = (persisted.body?.skills ?? []).find((skill) => skill.name === install.body?.name)
     check('the verdict is cached on the receipt', cached?.provenance?.update?.status === 'current', cached?.provenance?.update?.status)

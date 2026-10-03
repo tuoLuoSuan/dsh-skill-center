@@ -47,6 +47,10 @@ if (cli === undefined) {
   console.error('could not find the dsh CLI. Looked at:')
   for (const candidate of CLI_CANDIDATES) console.error(`  ${candidate}`)
   console.error('\nset SKILL_CENTER_DSH_CLI to the dsh.cmd / dsh you want to test with.')
+  // Safe to exit hard here: everything above is synchronous filesystem work, so
+  // there is no libuv handle mid-close for the Windows assertion to trip over.
+  // (Once any async work has started, set process.exitCode instead — see the
+  // guard in docs/probe-freshness.mjs.)
   process.exit(2)
 }
 
