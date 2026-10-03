@@ -74,6 +74,8 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 
 ## 安装
 
+已发布到 npm：[`dsh-skill-center`](https://www.npmjs.com/package/dsh-skill-center)
+
 ```powershell
 dsh plugin --profile <你的 profile> add dsh-skill-center
 ```
@@ -97,7 +99,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 `lib/` 下的宿主代码改动仍需要重启。
 
 本包**没有任何运行时依赖**——`dependencies` 是空的，装下去的就是 `lib/`、`client/`、`locale/`
-和两个清单文件，加起来 21 个文件 / 286 KB 解包后。对 `@deepseek-ai/dsh` 的依赖写在
+和两个清单文件，加起来 22 个文件 / 94.1 kB 打包（解包 319.9 kB）。对 `@deepseek-ai/dsh` 的依赖写在
 `peerDependencies` 里（`>=0.2.0-rc.2`）并且标了 `optional`：它是一道**版本门禁**而不是要去安装的东西——
 DSH 读这个字段来判断插件和当前运行时兼不兼容，pnpm 则因为 `optional` 不会去装第二份宿主。
 
@@ -195,8 +197,8 @@ node docs/check-published.mjs  # 陌生人此刻在 GitHub 上看到的到底是
 node docs/look-at-page.mjs     # 上面那一页渲染出来好不好看（读 HTML，不是 API）
 node docs/shot-page.mjs        # 把那一页真的截一张图下来，自己看一眼
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
-node docs/probe-npm-install.mjs  # 把打包产物装进一个用完就删的 profile，验证 npm 路径能用
-                                 # （不带参数时读当前目录下的 .tgz，先 npm pack 一个）
+node docs/probe-npm-install.mjs  # 从 npm 装进一个用完就删的 profile，验证陌生人那条路能用
+                                 # （不带参数时装 registry 上的版本；给个路径则装本地 tarball）
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报

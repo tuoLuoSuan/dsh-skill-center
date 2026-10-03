@@ -8,7 +8,7 @@
  * to satisfy. Those are different consequences of one field, and the package is
  * only safe to publish if the gate fires and the install does not.
  *
- * Usage: node docs/probe-npm-install.mjs [<spec>]   (default: the packed tarball)
+ * Usage: node docs/probe-npm-install.mjs [<spec>]   (default: the published package)
  */
 
 import { execFileSync } from 'node:child_process'
@@ -19,7 +19,12 @@ const PROFILE = '__npm_probe__'
 const HOME = process.env.USERPROFILE ?? process.env.HOME
 const PACKAGE = 'dsh-skill-center'
 
-const spec = process.argv[2] ?? resolve('dsh-skill-center-0.1.0.tgz')
+/*
+ * The default is the registry spec, not a local tarball. Installing the version
+ * that is actually published is the thing a stranger does; reading the tarball
+ * only proves the tarball is fine. Pass a path to test a local pack instead.
+ */
+const spec = process.argv[2] ?? PACKAGE
 const profileDir = join(HOME, '.dsh', 'profiles', PROFILE)
 
 /*
