@@ -229,6 +229,9 @@ const routeTable = {
       ],
     },
     conflict: { exists: true, name: 'pdf', sameSource: false, existingSource: 'claudeskills', existingTitle: 'pdf', renameTo: 'pdf-2' },
+    // The pane has to name the revision it read, or the guarantee that an
+    // install cannot drift under the user is invisible.
+    revision: { commit: '8ca22dba9a94f28898bbce59f2537ff4d87c747d', committedAt: '2026-09-25T18:06:27Z', fetchedVia: 'tarball', pinned: true },
     files: [
       { path: 'SKILL.md', bytes: 8035, preview: '---\nname: pdf\n---\n', truncated: false },
       { path: 'forms.md', bytes: 200, preview: '# forms', truncated: false },
@@ -554,6 +557,11 @@ if (card !== undefined) {
     check('preview names the reason fetching stopped', previewTree.html.includes('达到文件数上限'))
     check('preview shows the integrity stat', previewTree.html.includes('部分'))
     check('preview lists files the SKILL.md points at but nobody shipped', previewTree.html.includes('references/schema.md') && previewTree.html.includes('scripts/fill.py'))
+    // Which revision is on screen is part of what is being previewed: without
+    // it, two people reading the same skill page cannot tell they are looking
+    // at different code.
+    check('preview names the upstream revision', previewTree.html.includes('上游版本') && previewTree.html.includes('8ca22db'), undefined)
+    check('preview dates that revision', previewTree.html.includes('2026-09-25'), undefined)
     if (confirm !== undefined) {
       confirm.props.onClick()
       await new Promise((resolve) => setTimeout(resolve, 60))

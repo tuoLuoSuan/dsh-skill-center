@@ -40,10 +40,30 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 | **引用缺件** | `SKILL.md` 里 `` `scripts/build.py` `` 或 `[schema](references/schema.md)` 指向的文件如果不在取回的目录里，列出来。这类问题只在模型**第一次真用它**时才爆，而且爆在别人的任务中间 |
 | **同名冲突** | 目标名字已被占用时**不静默覆盖、也不静默加 `-2`**——两者都是你事后才发现的性质。三个选项连后果一起摆出来：覆盖（先把现有版本完整挪进 `.backup/`）、改名装为 `pdf-2`、跳过。默认永远是不动现有的那个 |
 
+### 装下来的就是那一次提交
+
+安装读的是 **commit**，不是分支名：
+
+```
+一次请求  api.github.com/repos/{owner}/{repo}/commits/{branch}   → 拿到 commit SHA
+一次请求  codeload.github.com/{owner}/{repo}/tar.gz/{sha}        → 整棵树，不可变
+```
+
+- **分支名是可变引用，commit 是不可变引用。** `raw.githubusercontent.com` 对分支名有 `max-age=300` 的 CDN 缓存，也就是说「刚才看是这版、五分钟后装下来是上一版」是可能的；按 SHA 取则缓存命中永远是对的。本项目自己就撞过这个坑：推完 README 立刻校验，读到的还是上一版。
+- **详情页写着它是哪一版**：「上游版本 `8ca22db` · 最后提交 2026-09-25」。问不到版本时（匿名 API 配额是 60 次/小时）会明说「没能问到上游版本，这次抓的是分支当前内容」，而不是假装钉住了。
+- **一次请求拿整棵树**，而不是每个文件一次：80 个文件就是 80 次请求，也更容易在中途失败。
+- **读过的 commit 只下载一次**。键就是 commit，所以这条缓存**永远不会过期、也不需要失效**——换个版本是换了个键，不是这个键下的旧值。
+- **二进制文件不再被写坏**。旧路径把所有内容按 UTF-8 解，技能里的 PNG / PDF 会被静默损坏；现在按字节判断，非文本走 base64 存盘。
+- 解 tar.gz 是手写的约 60 行，用 Node 自带的 `zlib`，**运行时依赖仍然是 0**。
+
 ### 装完之后看得见的状态
 
-- **来路**：每个装过的技能记住它来自哪个源、哪个仓库、哪条路径，列表里直接显示
-- **更新检查**：一键比对上游 `SKILL.md` 的 sha256，给「最新 / 有更新 / 上游已删除 / 无法检查」徽标。哈希只算 `SKILL.md`——对 `scripts/*.py` 做校验会让上游每次提交都显示成内容变更
+- **来路**：每个装过的技能记住它来自哪个源、哪个仓库、哪条路径、**哪个 commit**，列表里直接显示
+- **更新检查**：先问分支现在的 commit——**和记录里的一样就到此为止**，一个文件都不用下，且结论是确定的（同一个 commit 命名同一棵树）。不一样才去取那一版算整棵树的哈希：
+  - 树也一样 → **最新**，同时把记录里的 commit 前移，下次检查又变回一次小请求
+  - 树不一样 → **有更新**
+  - 这是与旧行为最实质的差别：哈希从「只算 `SKILL.md`」变成**整棵树**，所以上游改一行 `scripts/*.py` 也瞒不过去——而这恰恰是技能最常被修的地方
+  - 拿不到版本信息时会降级成只比 `SKILL.md`，并在结果里标出这次的结论只覆盖了文档（`depth: document`）
 - **回收站**：删除是移进 `.trash/` 而不是抹掉，并弹出可撤销提示；被删的技能连同它的来路记录一起进桶，恢复后仍是「受管理」的技能
 - **`.backup/`**：同名覆盖时上一版完整保留在 `<root>/.backup/<name>-<时间戳>/`
 
@@ -137,7 +157,7 @@ DSH 读这个字段来判断插件和当前运行时兼不兼容，pnpm 则因�
 | GET | `/trash` | 列出回收站 |
 | GET | `/updates` | 对所有受管理技能做一次更新检查 |
 | POST | `/item` | 取详情（含 `SKILL.md` 原文） |
-| POST | `/preview` | 取待安装文件清单 + 体检 + 完整性 + 引用缺件 + 同名冲突 |
+| POST | `/preview` | 取待安装文件清单 + 体检 + 完整性 + 引用缺件 + 同名冲突 + `revision`（本次读的是哪个 commit） |
 | POST | `/install` | 落地到 `~/.dsh/skills/<name>/`；`conflict` 取 `fail`（默认）/`skip`/`rename`/`replace` |
 | POST | `/remove` | 移进回收站（仅限用户根，项目根只读）；`permanent: true` 才真删 |
 | POST | `/restore` | 从回收站恢复，连来路记录一起接回去 |
@@ -180,6 +200,8 @@ node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
 node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
+node docs/probe-tarball.mjs    # tar.gz 解码器（合成包 + 一个真实仓库）
+node docs/probe-freshness.mjs  # 按 commit 钉住、整棵树比对与缓存命中（真实网络）
 ```
 
 两个冒烟测试都不碰真实的 `~/.dsh/skills`（宿主测试写进 `mkdtemp` 临时目录）。
@@ -231,8 +253,9 @@ harness 就能看到界面**。它顺带发现过两处夹具错误（`counts` �
 - `lib/validate.js` `SKILL.md` 体检与 `name:` 行改写
 - `lib/completeness.js` 「这次取回的文件树是否完整」
 - `lib/references.js` `SKILL.md` 引用的文件是否存在
-- `lib/provenance.js` 安装来路记录（`<root>/.skill-center.json`）
-- `lib/updates.js` 按来路记录比对上游
+- `lib/tarball.js` 手解 tar.gz（一次请求拿到一个 commit 的整棵树）
+- `lib/provenance.js` 安装来路记录（`<root>/.skill-center.json`），含整棵树的哈希
+- `lib/updates.js` 按来路记录比对上游：先比 commit，必要时再比整棵树
 - `lib/agents.js` 其他 Agent 技能目录的发现与导入
 - `lib/frontmatter.js` `SKILL.md` frontmatter 解析
 - `lib/http.js` `sendJson` / `readJsonBody` / `sameOrigin`

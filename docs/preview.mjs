@@ -119,7 +119,7 @@ const SOURCES = {
       { name: 'nature-figure', description: 'Create, revise and export manuscript scientific figures.', source: 'user-dsh', valid: true, writable: true, bytes: 18422, fileCount: 7, modifiedAt: '2026-10-01',
         provenance: { source: 'claudeskills', origin: 'remote', installedAt: '2026-10-01T09:12:00.000Z', update: { status: 'update', checkedAt: '2026-10-02T03:00:00.000Z' } } },
       { name: 'humanizer-zh', description: '去除文本中的 AI 生成痕迹。', source: 'user-dsh', valid: true, writable: true, bytes: 9120, fileCount: 3, modifiedAt: '2026-09-27',
-        provenance: { source: 'repos', origin: 'remote', installedAt: '2026-09-27T14:02:00.000Z', update: { status: 'current', checkedAt: '2026-10-02T03:00:00.000Z' } } },
+        provenance: { source: 'repos', origin: 'remote', installedAt: '2026-09-27T14:02:00.000Z', commit: '8ca22dba9a94f28898bbce59f2537ff4d87c747d', update: { status: 'current', checkedAt: '2026-10-02T03:00:00.000Z' } } },
       { name: 'pdf', description: 'Extract text and tables from PDFs.', source: 'project-dsh', valid: true, writable: false, bytes: 8035, fileCount: 12, modifiedAt: '2026-09-30' },
       { name: 'gone-upstream', description: '这个技能的上游仓库已经删掉了。', source: 'user-dsh', valid: true, writable: true, bytes: 4210, fileCount: 2, modifiedAt: '2026-09-11',
         provenance: { source: 'repos', origin: 'local', from: 'C:\\Users\\you\\.claude\\skills\\gone-upstream', update: { status: 'missing', checkedAt: '2026-10-02T03:00:00.000Z' } } },
@@ -173,6 +173,7 @@ const PREVIEW = {
   completeness: { complete: true, fileCount: 4, byteCount: 48213, reasons: [], skippedCount: 0, skipped: [] },
   references: { referenced: 3, present: 3, missingCount: 0, missing: [] },
   conflict: { exists: false, name: 'pdf' },
+  revision: { commit: '8ca22dba9a94f28898bbce59f2537ff4d87c747d', committedAt: '2026-09-25T18:06:27Z', fetchedVia: 'tarball', pinned: true },
   files: [
     { path: 'SKILL.md', bytes: 8035, preview: '---\nname: pdf\ndescription: Use this skill…', truncated: true },
     { path: 'forms.md', bytes: 6102, preview: '# Filling forms\n\nAcroForm fields are addressed by…', truncated: true },
@@ -216,6 +217,9 @@ const PREVIEW_BLOCKED = {
   ...PREVIEW,
   suggestedName: 'git-commit-helper',
   license: undefined,
+  // No resolvable revision, so this scenario also shows what the pane says when
+  // it read the branch: the guarantee is missing and the line admits it.
+  revision: { fetchedVia: 'crawl', pinned: false },
   inspection: {
     blocked: true,
     repairable: true,

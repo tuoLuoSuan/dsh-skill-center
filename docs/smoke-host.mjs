@@ -143,9 +143,32 @@ try {
     check('preview reports no conflict before the first install', preview.body?.conflict?.exists === false,
       JSON.stringify(preview.body?.conflict))
 
+    // Reading a skill at a commit rather than at a branch is the difference
+    // between "this is what upstream had when I looked" and "this is what
+    // upstream has whenever the CDN last refreshed". The revision API can be
+    // unavailable though, and an install must still work then — so what is
+    // asserted is that the answer is *consistent*, whichever way it went.
+    const revision = preview.body?.revision
+    check('preview reports which revision route it took', revision?.fetchedVia === 'tarball' || revision?.fetchedVia === 'crawl',
+      `via ${revision?.fetchedVia}`)
+    if (revision?.pinned === true) {
+      check('a pinned preview names a 40-hex commit', /^[0-9a-f]{40}$/.test(String(revision.commit ?? '')), revision.commit)
+      check('a pinned preview came from one archive', revision.fetchedVia === 'tarball', revision.fetchedVia)
+      check('a pinned preview carries the commit date', typeof revision.committedAt === 'string' && revision.committedAt !== '', revision.committedAt)
+    } else {
+      // The honest half: when the revision could not be resolved, nothing may
+      // claim to be pinned, and the pane has something to say about it.
+      check('an unpinned preview claims no commit', revision?.commit === undefined || revision?.commit === null, JSON.stringify(revision))
+      check('an unpinned preview admits the branch was read', revision?.fetchedVia === 'crawl', revision?.fetchedVia)
+    }
+    const pinned = revision?.pinned === true
+
     const install = await post('/install', { entry: target })
     check('POST /install → 200', install.status === 200, install.body?.error ?? install.body?.directory)
     check('installed name is grammar-valid', /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(install.body?.name ?? '')), install.body?.name)
+    check('the install reports the same commit the preview saw',
+      pinned ? install.body?.commit === String(revision.commit).slice(0, 7) : install.body?.commit === undefined,
+      `${install.body?.commit} vs ${pinned ? String(revision.commit).slice(0, 7) : '(unpinned)'}`)
 
     const conflict = await post('/preview', { entry: target })
     check('preview now reports the name is taken', conflict.body?.conflict?.exists === true, JSON.stringify(conflict.body?.conflict))
@@ -204,10 +227,31 @@ try {
     const managed = (restored.body?.skills ?? []).find((skill) => skill.name === install.body?.name)
     check('the restored skill still has a receipt', managed?.provenance?.source === target.source, JSON.stringify(managed?.provenance?.source))
     check('the receipt remembers the upstream hash', typeof managed?.provenance?.sha256 === 'string' && managed.provenance.sha256.length === 64, managed?.provenance?.sha256?.slice(0, 12))
+    // The document hash only covers SKILL.md, so a change to any other file in
+    // the skill used to be invisible. The whole-tree hash is what closes that.
+    check('the receipt remembers the whole tree', typeof managed?.provenance?.treeHash === 'string' && managed.provenance.treeHash.length === 64,
+      managed?.provenance?.treeHash?.slice(0, 12))
+    // Whether it could be pinned depends on the revision API answering; what
+    // must hold either way is that the receipt describes what actually
+    // happened, so a later check compares against the right thing.
+    check('the receipt describes the route the files took',
+      managed?.provenance?.fetchedVia === 'tarball' || managed?.provenance?.fetchedVia === 'crawl',
+      managed?.provenance?.fetchedVia)
+    check('a receipt is pinned only when it came from an archive',
+      (managed?.provenance?.fetchedVia === 'tarball') === /^[0-9a-f]{40}$/.test(String(managed?.provenance?.commit ?? '')),
+      `commit ${managed?.provenance?.commit} via ${managed?.provenance?.fetchedVia}`)
     const updates = await get('/updates')
     check('GET /updates → 200', updates.status === 200, `status ${updates.status}`)
     check('the freshly installed skill reads as current', updates.body?.results?.[install.body?.name]?.status === 'current',
       `${install.body?.name} → ${updates.body?.results?.[install.body?.name]?.status} ${updates.body?.results?.[install.body?.name]?.message ?? ''}`)
+    // "Current" has to mean the whole skill when we can see the whole skill,
+    // and has to say so when all we could compare was the document.
+    const verdict = updates.body?.results?.[install.body?.name]
+    check('the verdict states how much of the skill it compared',
+      verdict?.depth === 'full' || verdict?.depth === 'document', verdict?.depth)
+    check('and the depth matches the route the install took',
+      verdict?.depth === (managed?.provenance?.fetchedVia === 'tarball' ? 'full' : 'document'),
+      `${verdict?.depth} for ${managed?.provenance?.fetchedVia}`)
     const persisted = await get('/installed')
     const cached = (persisted.body?.skills ?? []).find((skill) => skill.name === install.body?.name)
     check('the verdict is cached on the receipt', cached?.provenance?.update?.status === 'current', cached?.provenance?.update?.status)

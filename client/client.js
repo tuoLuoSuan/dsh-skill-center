@@ -140,6 +140,9 @@ window.__ModuleLoader__.load({
         inspectionBlocked: '照现在这样装上去，DSH 会直接忽略它。',
         repairLabel: '自动修正 name',
         repairHint: '只改写 SKILL.md 里的 name 字段，其余内容原样保留。',
+        revisionPinned: '上游版本',
+        revisionCommitted: '最后提交',
+        revisionUnknown: '没能问到上游版本，这次抓的是分支当前内容。',
         integrity: '完整性',
         integrityComplete: '完整',
         integrityPartial: '部分',
@@ -270,6 +273,9 @@ window.__ModuleLoader__.load({
         inspectionBlocked: 'Installed as-is, DSH would ignore this skill entirely.',
         repairLabel: 'Fix the name automatically',
         repairHint: 'Rewrites only the name field in SKILL.md; everything else is copied byte for byte.',
+        revisionPinned: 'Upstream revision',
+        revisionCommitted: 'last commit',
+        revisionUnknown: 'Could not ask for an upstream revision, so this is whatever the branch held.',
         integrity: 'Integrity',
         integrityComplete: 'Complete',
         integrityPartial: 'Partial',
@@ -605,6 +611,8 @@ window.__ModuleLoader__.load({
 .sc-choice > span:first-of-type { font-weight: 500; }
 .sc-choice-off { opacity: .45; cursor: default; }
 .sc-warn-text { color: var(--dsw-alias-state-warn-primary, #d97706); }
+/* Sits directly under the stats, so it reads as a footnote to them. */
+.sc-revision { margin: 8px 0 0; }
 
 /* ----------------------------------------------------------- detail block */
 
@@ -1297,6 +1305,19 @@ window.__ModuleLoader__.load({
       return `${(size / 1024 / 1024).toFixed(1)} MB`
     }
 
+    /**
+     * Format an ISO timestamp as a plain date.
+     *
+     * A commit date is a fact about the upstream, not about this session, so it
+     * gets a date and no time — "最后提交 2026-09-25" answers "is this stale?"
+     * and "37 minutes ago" would answer a question nobody asked.
+     */
+    function day(value) {
+      if (typeof value !== 'string' || value === '') return ''
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)
+    }
+
     /** Format a star count compactly. */
     function compact(value) {
       const count = Number(value) || 0
@@ -1572,6 +1593,11 @@ window.__ModuleLoader__.load({
             e('div', { className: 'sc-statk' }, t('installTo')),
             e('div', { className: 'sc-statv sc-mono', title: target }, state.installName || '…')),
         ),
+        // Which revision this preview is showing. Before this line existed the
+        // pane could say how many files it had but not *which* files — so two
+        // people looking at the same skill page could be looking at different
+        // code with no way to tell.
+        RevisionLine({ preview, t }),
         // The single most useful thing this pane does: say up front whether the
         // harness will actually load what the user is about to install.
         InspectionBlock({ preview, state, store, t }),
@@ -1721,6 +1747,34 @@ window.__ModuleLoader__.load({
               e('ul', { className: 'sc-problems' }, ...refs.missing.map((reference, index) => e('li', { key: index }, e('code', { className: 'sc-mono' }, reference.path)))),
             )
           : null,
+      )
+    }
+
+    /**
+     * Which upstream revision this preview was read from.
+     *
+     * The whole point of reading a skill at a commit rather than at a branch is
+     * that the answer cannot change under you — so the pane has to name it, or
+     * the guarantee is invisible. When the revision could not be resolved the
+     * line says so instead of staying silent, because "we read the branch, and
+     * branches move" is a real difference in what the user is getting.
+     * @param input - the staged preview and the translator.
+     * @returns the line element, or null when the source has no revision.
+     */
+    function RevisionLine({ preview, t }) {
+      const revision = preview.revision
+      if (revision === undefined || revision === null) return null
+      const date = day(revision.committedAt)
+      if (revision.commit === undefined || revision.commit === null) {
+        return e('div', { className: 'sc-hint sc-revision' }, e('span', { className: 'sc-warn-text' }, t('revisionUnknown')))
+      }
+      return e(
+        'div',
+        { className: 'sc-hint sc-revision' },
+        t('revisionPinned'),
+        ' ',
+        e('code', { className: 'sc-mono', title: revision.commit }, revision.commit.slice(0, 7)),
+        date === '' ? null : ` · ${t('revisionCommitted')} ${date}`,
       )
     }
 
@@ -1877,7 +1931,13 @@ window.__ModuleLoader__.load({
       const record = skill.provenance
       if (record === undefined || record === null) return undefined
       if (record.origin === 'local') return `${t('originLocal')} · ${record.fromLabel ?? ''}`.trim()
-      return `${t('originRemote')} ${record.source ?? ''}`.trim()
+      const base = `${t('originRemote')} ${record.source ?? ''}`.trim()
+      // The revision is part of where a skill came from: two installs of the
+      // same name a week apart are different code, and this line is the only
+      // place that says which of them is on disk.
+      return typeof record.commit === 'string' && record.commit !== ''
+        ? `${base} · ${record.commit.slice(0, 7)}`
+        : base
     }
 
     /** The installed-skill inventory, plus the recoverable-delete list. */
