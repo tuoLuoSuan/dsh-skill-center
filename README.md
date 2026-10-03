@@ -194,6 +194,8 @@ node docs/preview.mjs          # 把真实 bundle 渲染成 HTML，再用 Chrome
 node docs/preview.mjs --no-shot
 node docs/audit-publish.mjs    # 发布前自检：账号名残留与写死的绝对路径
 node docs/check-published.mjs  # 陌生人此刻在 GitHub 上看到的到底是什么（读 API）
+                               # 匿名配额只有 60 次/小时；设 GITHUB_TOKEN 可提高
+                               # 退出码 0=全过 1=有失败 2=有项目没查成（网络/配额）
 node docs/look-at-page.mjs     # 上面那一页渲染出来好不好看（读 HTML，不是 API）
 node docs/shot-page.mjs        # 把那一页真的截一张图下来，自己看一眼
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
