@@ -207,6 +207,7 @@ node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
 node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
 node docs/probe-tarball.mjs    # tar.gz 解码器（合成包 + 一个真实仓库）
 node docs/probe-freshness.mjs  # 按 commit 钉住、整棵树比对与缓存命中（真实网络）
+node docs/probe-glass.mjs      # 玻璃主题下这块面板还是不是实心的（先跑一次 preview.mjs）
 ```
 
 两个冒烟测试都不碰真实的 `~/.dsh/skills`（宿主测试写进 `mkdtemp` 临时目录）。
@@ -248,6 +249,15 @@ asar 里的 JS）。`probe-npm-install.mjs` 直接调那个二进制而不是 `.
 harness 就能看到界面**。它顺带发现过两处夹具错误（`counts` 形状、`/item` 响应形状）、
 一处夹具缺口（`/updates` 少顶层 `checkedAt`，页脚渲染成 `Invalid Date`）与一处真 bug
 （完整性提示拼错了字段），值得在改渲染函数后先跑它。
+
+**这块面板不在玻璃主题下让路。** 壁纸类插件把宿主变透明的办法，是把
+`--dsw-alias-bg-layer-*` 这几个别名重写成 `color-mix(…, transparent)`；凡是拿这些别名
+当自己背景的面，壁纸就会透上来。对话气泡透一点没问题，一张罗列文件树的列表不行。所以
+面板的颜色是**画在一块不透明底板上**的：`--sc-plate` 取自静态调色板
+（`--dsw-static-neutral-bluish-*`，任何主题都不改写它），`--sc-solid` 再把主题底色叠在
+它上面。没有玻璃主题时两层同色，等于什么都没改；有玻璃主题时面板仍是实心的。
+`docs/probe-glass.mjs` 把这个约定变成断言：它不问壁纸插件在不在，只问「别名被别人改成
+半透明之后，这块面还实不实」——并且先确认那次改写真的生效了，否则这个测试什么也没证明。
 
 ### 文件
 

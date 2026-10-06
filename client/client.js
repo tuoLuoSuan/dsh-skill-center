@@ -330,6 +330,15 @@ window.__ModuleLoader__.load({
   --sc-line: var(--dsw-alias-border-l2, rgba(127,127,127,.18));
   --sc-line-soft: var(--dsw-alias-border-l1, rgba(127,127,127,.10));
   --sc-face: var(--dsw-alias-bg-layer-2, #fff);
+  /* A glass theme (dsh-plugin-wallpaper-engine and its kin) rewrites the
+     the --dsw-alias-bg-layer-* aliases to color-mix(..., transparent) so the
+     wallpaper shows through every host surface. This panel is a surface that
+     must not, so its colour is painted over an opaque plate taken from the
+     static palette, which no theme rewrites. With no glass theme the two are
+     the same colour, so this changes nothing; with one, the panel stays solid.
+     bg-layer-1 is bluish-00 (white) in light and bluish-875 in dark. */
+  --sc-plate: var(--dsw-static-neutral-bluish-00, #fff);
+  --sc-solid: linear-gradient(var(--dsw-alias-bg-layer-1, transparent), var(--dsw-alias-bg-layer-1, transparent)) var(--sc-plate);
   --sc-accent: var(--dsw-alias-link, #4176e6);
   --sc-tone: var(--dsw-alias-label-primary, #0f1115);
   --sc-tone-2: var(--dsw-alias-label-secondary, #61666b);
@@ -340,6 +349,7 @@ window.__ModuleLoader__.load({
   color: var(--sc-tone); font-family: var(--sc-font); font-size: 13px; line-height: 1.6;
   -webkit-font-smoothing: antialiased;
 }
+body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish-875, #232324); }
 .sc-scope ::-webkit-scrollbar { width: 10px; height: 10px; }
 .sc-scope ::-webkit-scrollbar-thumb {
   background: var(--dsw-alias-scrollbar-bg-l1, rgba(127,127,127,.28));
@@ -357,12 +367,12 @@ window.__ModuleLoader__.load({
   position: relative; z-index: 2147483001;
   width: min(800px, 94vw); height: 100%;
   display: flex; flex-direction: column;
-  background: var(--dsw-alias-bg-layer-1, #fff);
+  background: var(--sc-solid);
   border-left: 1px solid var(--sc-line);
   box-shadow: var(--dsw-shadow-lv3, -18px 0 48px rgba(0,0,0,.18));
   animation: sc-slide .2s cubic-bezier(.22,.61,.36,1);
 }
-.sc-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.sc-root { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--sc-solid); }
 .sc-grow { flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------------- header */
@@ -404,7 +414,7 @@ window.__ModuleLoader__.load({
 .sc-tab:hover { color: var(--sc-tone); }
 .sc-tab.sc-on {
   color: var(--sc-tone);
-  background: var(--dsw-alias-bg-layer-1, #fff);
+  background: var(--sc-solid);
   box-shadow: var(--dsw-shadow-lv1, 0 1px 2px rgba(0,0,0,.10));
   font-weight: 500;
 }
@@ -619,7 +629,7 @@ window.__ModuleLoader__.load({
 .sc-detailbar {
   position: sticky; top: 0; z-index: 3; margin: 0 -20px 12px; padding: 10px 20px;
   display: flex; align-items: center; gap: 8px;
-  background: var(--dsw-alias-bg-layer-1, #fff);
+  background: var(--sc-solid);
   border-bottom: 1px solid var(--sc-line-soft);
 }
 .sc-htitle { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 2px 0 8px; }
