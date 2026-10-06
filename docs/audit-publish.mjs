@@ -15,6 +15,9 @@ import { fileURLToPath } from 'node:url'
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 const SKIP_DIRS = new Set(['node_modules', '.git', 'preview', 'screenshots'])
+// Scratch files are never published (`.tmp*` is in .gitignore), so they must not
+// be able to fail a release gate.
+const SKIP_FILES = /^\.tmp/
 const TEXT = /\.(?:mjs|js|json|md|yml|yaml|css|svg|txt)$/
 
 // Fixture homes are fine as long as they are obviously nobody's real home.
@@ -29,6 +32,10 @@ const PLACEHOLDER_PREFIX = new RegExp(
 )
 const ALLOWED_ABSOLUTE = [
   PLACEHOLDER_PREFIX,
+  // `D:\path\to\thing` is the canonical "put your own path here" placeholder
+  // and cannot name anybody's real directory.
+  /^[A-Za-z]:[\\/]+path[\\/]+to[\\/]/i,
+  /^\/path\/to\//i,
   // The scan stops at whitespace, so `C:\Program Files\...` arrives truncated.
   /^[A-Za-z]:[\\/]+Program/,
   /^[A-Za-z]:[\\/]+Program Files(?: \(x86\))?[\\/]/i,
@@ -41,7 +48,7 @@ const NOTE = `This file names a real Windows account. Fixture paths must use one
 async function walk(directory) {
   const found = []
   for (const entry of await readdir(directory, { withFileTypes: true })) {
-    if (SKIP_DIRS.has(entry.name)) continue
+    if (SKIP_DIRS.has(entry.name) || SKIP_FILES.test(entry.name)) continue
     const path = join(directory, entry.name)
     if (entry.isDirectory()) found.push(...await walk(path))
     else if (TEXT.test(entry.name)) found.push(path)
