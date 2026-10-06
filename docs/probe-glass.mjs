@@ -67,6 +67,11 @@ body.glass[data-ds-dark-theme] { --glass-tint: #0d1524; }
 #report { display: none; }
 `
 
+/* The declaration the panel used to carry. Applied on top of the glass theme it
+ * is what the panel looked like before -- and it is the control the measuring
+ * script forces back on to confirm that declaration was really the problem. */
+const OLD_RULE = '.sc-drawer, .sc-root, .sc-detailbar, .sc-tab.sc-on { background: var(--dsw-alias-bg-layer-1, #fff) !important; }'
+
 /* Runs inside the page. Reads the panel's own colour with the glass rewrite on
  * and off, then forces the declaration the panel used to carry back on top to
  * confirm that declaration was the problem. */
@@ -95,7 +100,7 @@ try {
   const glass = { alias: readAlias(), color: readColor() }
 
   const undo = document.createElement('style')
-  undo.textContent = '.sc-drawer, .sc-root, .sc-detailbar, .sc-tab.sc-on { background: var(--dsw-alias-bg-layer-1, #fff) !important; }'
+  undo.textContent = ${JSON.stringify(OLD_RULE)}
   document.head.appendChild(undo)
   const before = { color: readColor() }
   undo.remove()
@@ -161,22 +166,11 @@ async function main() {
     console.log(`${ok ? 'ok  ' : 'FAIL'}  ${label}${ok || detail === undefined ? '' : ` — ${detail}`}`)
   }
 
-  for (const theme of ['light', 'dark']) {
-    const source = readFileSync(join(outDir, `drawer-${theme}.html`), 'utf8')
-    const page = source
-      .replace('<body', '<body class="glass"')
-      .replace('</head>', `<style>${GLASS_CSS}</style></head>`)
-      .replace('</body>', `<script>${MEASURE_JS}</script></body>`)
-
-    const htmlPath = join(outDir, `glass-${theme}.html`)
-    const pngPath = join(outDir, `glass-${theme}.png`)
-    writeFileSync(htmlPath, page, 'utf8')
-
-    // The file URL goes last on both commands. Leave it off the screenshot and
-    // Chrome happily photographs its own start page instead, which is a
-    // perfectly valid PNG of the wrong thing.
+  /* The file URL goes last on every command. Leave it off the screenshot and
+   * Chrome happily photographs its own start page instead -- exit code 0, a
+   * valid PNG, the wrong picture. One variable, so the two cannot drift. */
+  const shoot = (htmlPath, pngPath) => {
     const fileUrl = `file:///${htmlPath.replace(/\\/g, '/')}`
-
     withProfile((profile) => {
       execFileSync(CHROME, [
         '--headless=new',
@@ -191,8 +185,11 @@ async function main() {
         fileUrl,
       ], { stdio: 'ignore' })
     })
+    return fileUrl
+  }
 
-    const dumped = withProfile((profile) =>
+  const dumpDom = (fileUrl) =>
+    withProfile((profile) =>
       execFileSync(CHROME, [
         '--headless=new',
         '--disable-gpu',
@@ -204,6 +201,26 @@ async function main() {
         fileUrl,
       ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }),
     )
+
+  for (const theme of ['light', 'dark']) {
+    const source = readFileSync(join(outDir, `drawer-${theme}.html`), 'utf8')
+    const build = (extraCss) =>
+      source
+        .replace('<body', '<body class="glass"')
+        .replace('</head>', `<style>${GLASS_CSS}${extraCss}</style></head>`)
+        .replace('</body>', `<script>${MEASURE_JS}</script></body>`)
+
+    // Two pages: the panel as it is, and the panel with its old declaration
+    // back on top. The first is the fix; the second is what the user saw.
+    const afterPath = join(outDir, `glass-${theme}.html`)
+    const beforePath = join(outDir, `glass-${theme}-before.html`)
+    writeFileSync(afterPath, build(''), 'utf8')
+    writeFileSync(beforePath, build(`\n${OLD_RULE}\n`), 'utf8')
+
+    const afterUrl = shoot(afterPath, join(outDir, `glass-${theme}.png`))
+    shoot(beforePath, join(outDir, `glass-${theme}-before.png`))
+
+    const dumped = dumpDom(afterUrl)
 
     const match = /<pre id="report">([\s\S]*?)<\/pre>/.exec(dumped)
     if (match === null) {
