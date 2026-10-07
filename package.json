@@ -1,6 +1,6 @@
 {
   "name": "dsh-skill-center",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "技能中心 — 在 DSH 里搜索、浏览、预览并一键安装来自全网的 Agent Skills（claudeskills.info / skillsmp / GitHub 官方与社区仓库 / DSH 技能包）。Skill Center for DeepSeek Harness.",
   "icon": "icon.svg",
   "type": "module",

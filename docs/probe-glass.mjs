@@ -15,6 +15,10 @@
  *   - is the panel's own background still fully opaque
  *   - was the declaration it used to carry really translucent (the control)
  *   - with no glass theme, is the plate the same colour as the theme it sits in
+ *   - and the mirror image of all that: in the settings page, where the surface
+ *     belongs to the host and not to this panel, does the panel paint nothing?
+ *     It painted a white rectangle once, square-cornered enough to poke out past
+ *     the settings dialog's own rounded corner.
  *
  * The numbers come back through the DOM: the measuring script writes a JSON
  * report into a <pre>, and Chrome is asked to dump the DOM. Rendering a
@@ -117,6 +121,24 @@ try {
 }
 `
 
+/* The mirror question, asked of the settings page. Here the panel is a guest:
+ * the dialog is the host's surface, so the panel must paint nothing at all.
+ * `transparent` reads back as rgba(0, 0, 0, 0), which alphaOf scores as 0. */
+const INLINE_JS = `
+try {
+  const root = document.querySelector('.sc-root')
+  const pre = document.createElement('pre')
+  pre.id = 'report'
+  pre.textContent = JSON.stringify({ className: root.className, color: getComputedStyle(root).backgroundColor.trim() })
+  document.body.appendChild(pre)
+} catch (error) {
+  const pre = document.createElement('pre')
+  pre.id = 'report'
+  pre.textContent = JSON.stringify({ error: String(error) })
+  document.body.appendChild(pre)
+}
+`
+
 /* ------------------------------------------------------------------- helpers */
 
 const alphaOf = (value) => {
@@ -136,6 +158,26 @@ const alphaOf = (value) => {
   return undefined
 }
 
+/* One place builds the URL, so a screenshot and a dump cannot disagree about
+ * which page they are looking at. */
+const fileUrlOf = (htmlPath) => `file:///${htmlPath.replace(/\\/g, '/')}`
+
+/** The measuring script's report, or `{ error }` if the page did not produce one. */
+const readReport = (dumped) => {
+  const match = /<pre id="report">([\s\S]*?)<\/pre>/.exec(dumped)
+  if (match === null) return { error: 'the page did not report anything' }
+  const text = match[1]
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    return { error: String(error) }
+  }
+}
+
 const withProfile = (run) => {
   const profile = mkdtempSync(join(tmpdir(), 'probe-glass-'))
   try {
@@ -148,7 +190,11 @@ const withProfile = (run) => {
 /* ---------------------------------------------------------------------- main */
 
 async function main() {
-  const missing = ['light', 'dark'].filter((theme) => !existsSync(join(outDir, `drawer-${theme}.html`)))
+  const missing = ['drawer', 'browse'].flatMap((page) =>
+    ['light', 'dark']
+      .filter((theme) => !existsSync(join(outDir, `${page}-${theme}.html`)))
+      .map((theme) => `${page}-${theme}`),
+  )
   if (missing.length > 0) {
     console.log(`no preview to measure (${missing.join(', ')}) -- run: node docs/preview.mjs`)
     process.exitCode = 2
@@ -170,7 +216,7 @@ async function main() {
    * Chrome happily photographs its own start page instead -- exit code 0, a
    * valid PNG, the wrong picture. One variable, so the two cannot drift. */
   const shoot = (htmlPath, pngPath) => {
-    const fileUrl = `file:///${htmlPath.replace(/\\/g, '/')}`
+    const fileUrl = fileUrlOf(htmlPath)
     withProfile((profile) => {
       execFileSync(CHROME, [
         '--headless=new',
@@ -220,15 +266,7 @@ async function main() {
     const afterUrl = shoot(afterPath, join(outDir, `glass-${theme}.png`))
     shoot(beforePath, join(outDir, `glass-${theme}-before.png`))
 
-    const dumped = dumpDom(afterUrl)
-
-    const match = /<pre id="report">([\s\S]*?)<\/pre>/.exec(dumped)
-    if (match === null) {
-      check(`[${theme}] the page reported what it measured`, false, 'no report in the DOM')
-      continue
-    }
-
-    const report = JSON.parse(match[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"'))
+    const report = readReport(dumpDom(afterUrl))
     if (report.error !== undefined) {
       check(`[${theme}] the page reported what it measured`, false, report.error)
       continue
@@ -247,6 +285,25 @@ async function main() {
     check(`[${theme}] with no glass theme the plate is the theme's own colour`, report.plain.color === report.plain.alias, `${report.plain.color} vs ${report.plain.alias}`)
     check(`[${theme}] the plate does not move when glass arrives`, report.glass.color === report.plain.color, `${report.plain.color} -> ${report.glass.color}`)
     console.log(`  wrote preview/glass-${theme}.html and .png`)
+
+    /* The same panel rendered inline into the settings dialog the host owns.
+     * There the panel is a guest, and a guest that paints draws a rectangle. */
+    const inlinePath = join(outDir, `glass-inline-${theme}.html`)
+    const inlineSource = readFileSync(join(outDir, `browse-${theme}.html`), 'utf8')
+    writeFileSync(inlinePath, inlineSource.replace('</body>', `<script>${INLINE_JS}</script></body>`), 'utf8')
+
+    const inline = readReport(dumpDom(fileUrlOf(inlinePath)))
+    if (inline.error !== undefined) {
+      check(`[${theme}] the settings page reported what it measured`, false, inline.error)
+      continue
+    }
+
+    console.log(`  settings root     ${inline.color}`)
+    check(
+      `[${theme}] the settings page owns its surface, so the panel paints none`,
+      alphaOf(inline.color) === 0,
+      `${inline.className} -> ${inline.color}`,
+    )
   }
 
   console.log(failed === 0 ? '\nThe panel stays solid under a glass theme.' : `\n${failed} check(s) failed.`)

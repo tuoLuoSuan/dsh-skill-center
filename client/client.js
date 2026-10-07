@@ -372,7 +372,13 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
   box-shadow: var(--dsw-shadow-lv3, -18px 0 48px rgba(0,0,0,.18));
   animation: sc-slide .2s cubic-bezier(.22,.61,.36,1);
 }
-.sc-root { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--sc-solid); }
+/* The root paints nothing. A surface belongs to whoever owns the screen estate:
+   in the drawer that is sc-drawer below, and in the settings page it is the
+   host's own panel -- the panel is a guest there. Painting one here as well drew
+   a white rectangle with square corners on top of the settings dialog, square
+   enough to spill past the dialog's own rounded corner. So the plate lives on
+   the drawer only, and the inline panel stays see-through. */
+.sc-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .sc-grow { flex: 1; min-width: 0; }
 
 /* ---------------------------------------------------------------- header */
