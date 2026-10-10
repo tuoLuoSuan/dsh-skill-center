@@ -25,6 +25,10 @@ docs/theme.css
 # Probe output. `node docs/probe-dsh-plugins.mjs` rewrites it.
 docs/probe-*.txt
 
+# Scratch files. `.tmp-*` is the convention, and `git add -A` has already
+# swallowed one of them once. Nothing matching this is ever meant to ship.
+.tmp*
+
 # Editor and OS noise.
 .DS_Store
 Thumbs.db

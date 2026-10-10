@@ -267,15 +267,30 @@ const AGENTS = {
       ],
     },
     {
-      id: 'agents', label: 'Agents 共享目录', path: 'C:\\Users\\you\\.agents\\skills', visible: true, exists: true,
+      id: 'agents', label: 'Agents 共享目录（DSH 已可见）', path: 'C:\\Users\\you\\.agents\\skills', visible: true, exists: true,
       skills: [
         { name: 'deepseek-delegate', description: '把任务委派给子代理并汇总结果。', path: 'C:\\Users\\you\\.agents\\skills\\deepseek-delegate', skillFile: 'SKILL.md', flat: false, bytes: 5410, valid: true, repairable: false, collision: false, installed: false, problems: [] },
       ],
     },
-    { id: 'gemini', label: 'Gemini', path: 'C:\\Users\\you\\.gemini\\skills', visible: false, exists: false, skills: [] },
+    /* A row near the bottom of the table that a real machine turned out to be
+       using: seventeen skills sat in this directory while the table did not
+       name it. The fixture keeps one of them so the list is never drawn as if
+       only the big three agents exist. */
+    {
+      id: 'workbuddy', label: 'WorkBuddy', path: 'C:\\Users\\you\\.workbuddy\\skills', visible: false, exists: true,
+      skills: [
+        { name: 'weekly-report', description: '把本周的提交与工单整理成周报。', path: 'C:\\Users\\you\\.workbuddy\\skills\\weekly-report', skillFile: 'SKILL.md', flat: false, bytes: 2760, valid: true, repairable: false, collision: false, installed: false, problems: [] },
+        { name: 'meeting-notes.md', description: '扁平文件形式的技能，直接躺在根目录里。', path: 'C:\\Users\\you\\.workbuddy\\skills\\meeting-notes.md', skillFile: 'C:\\Users\\you\\.workbuddy\\skills\\meeting-notes.md', flat: true, bytes: 1580, valid: true, repairable: false, collision: false, installed: false, problems: [] },
+      ],
+    },
+    { id: 'gemini', label: 'Gemini CLI', path: 'C:\\Users\\you\\.gemini\\skills', visible: false, exists: false, skills: [] },
     { id: 'antigravity', label: 'Antigravity', path: 'C:\\Users\\you\\.gemini\\antigravity\\skills', visible: false, exists: false, skills: [] },
+    { id: 'cursor', label: 'Cursor', path: 'C:\\Users\\you\\.cursor\\skills', visible: false, exists: false, skills: [] },
+    { id: 'windsurf', label: 'Windsurf', path: 'C:\\Users\\you\\.codeium\\windsurf\\skills', visible: false, exists: false, skills: [] },
+    { id: 'claude-project', label: 'Claude Code（项目级）', path: 'D:\\path\\to\\app\\.claude\\skills', visible: false, exists: false, skills: [] },
+    { id: 'generic-project', label: '通用（项目级 skills）', path: 'D:\\path\\to\\app\\skills', visible: false, exists: false, skills: [] },
   ],
-  hidden: 6,
+  hidden: 9,
   scannedAt: '2026-10-02T03:40:00.000Z',
 }
 
@@ -314,6 +329,29 @@ const responses = {
   '/dsh-skill-center/api/restore': { ok: true, name: 'brainstorming' },
   '/dsh-skill-center/api/purge': { ok: true, removed: 1 },
   '/dsh-skill-center/api/agents': AGENTS,
+  '/dsh-skill-center/api/usage': (() => {
+    // Only skills that were actually invoked show up here. A skill that has
+    // never run is absent from the map, not present with a zero -- the panel
+    // leans on that difference, so the fixture has to keep it.
+    const byName = {}
+    const hits = {
+      'nature-figure': [12, '2026-10-04T02:15:09.481Z'],
+      'humanizer-zh': [3, '2026-10-03T18:44:02.000Z'],
+    }
+    for (const skill of SOURCES.installed.skills) {
+      const hit = hits[skill.name]
+      if (hit) byName[skill.name] = { calls: hit[0], lastUsedAt: Date.parse(hit[1]) }
+    }
+    return {
+      available: true,
+      byName,
+      sessions: 87,
+      bytes: 67607978,
+      recomputed: 0,
+      scannedAt: Date.parse('2026-10-10T09:00:00.000Z'),
+      ms: 7,
+    }
+  })(),
   '/dsh-skill-center/api/import-local': { ok: true, name: 'tidy-helper', repaired: false },
   '/dsh-skill-center/api/updates': (() => {
     const results = {}

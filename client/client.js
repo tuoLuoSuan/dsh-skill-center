@@ -186,6 +186,20 @@ window.__ModuleLoader__.load({
         invocationBroken: 'DSH 会忽略它',
         invocationBrokenHint: 'frontmatter 里的调用权限写法不对，宿主会整份丢掉这个技能，连同它的名字和描述。',
         skillUnit: ' 个技能',
+        usageUsed: '用过 {n} 次',
+        usageNever: '没用过',
+        usageLast: '最后一次是 {when}',
+        usageSummary: '用过 {n} 个',
+        usageFilterAll: '全部',
+        usageFilterUsed: '用过的',
+        usageFilterUnused: '没用过的',
+        usageScanning: '正在数用量…',
+        usageUnsupported: '这个 Node 版本读不了会话日志',
+        usageNoLogs: '没有找到会话日志',
+        usageFailed: '用量统计读取失败',
+        usageHint: '从本机会话日志里数出来的，装这个插件之前的调用也算。',
+        usageFilterEmpty: '没有符合条件的技能',
+        usageFilterEmptyHint: '换一个筛选条件看看。',
       },
       en: {
         nav: 'Skill Center',
@@ -336,6 +350,20 @@ window.__ModuleLoader__.load({
         invocationBroken: 'DSH will ignore it',
         invocationBrokenHint: 'The invocation fields in the frontmatter are not the spellings the harness accepts, so it drops the whole file, name and description included.',
         skillUnit: ' skill(s)',
+        usageUsed: 'used {n}×',
+        usageNever: 'never used',
+        usageLast: 'last used {when}',
+        usageSummary: '{n} used',
+        usageFilterAll: 'All',
+        usageFilterUsed: 'Used',
+        usageFilterUnused: 'Unused',
+        usageScanning: 'Counting runs…',
+        usageUnsupported: 'This Node version cannot read the session logs',
+        usageNoLogs: 'No session logs found',
+        usageFailed: 'Could not read the usage tally',
+        usageHint: 'Counted from this machine\'s session logs, so runs from before you installed this plugin count too.',
+        usageFilterEmpty: 'Nothing matches',
+        usageFilterEmptyHint: 'Try a different filter.',
       },
     }
 
@@ -1167,8 +1195,41 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
             managed: payload.managed ?? 0,
           },
         })
+        // Fired without awaiting so the inventory above paints first. Every path
+        // that refreshes the list refreshes the tally too, which keeps the two
+        // from disagreeing after an install or a removal.
+        void loadUsage(store)
       } catch {
         // the boot payload already carried an inventory; a failed refresh is quiet
+      }
+    }
+
+    /**
+     * Load how often each skill has actually run.
+     *
+     * A second request rather than part of `loadInstalled` on purpose. The first
+     * scan of a cold cache decompresses the whole session archive and takes
+     * seconds; the list should not sit behind that. So the inventory paints, and
+     * the counts land on top of it a moment later.
+     */
+    async function loadUsage(store) {
+      store.set({ usageLoading: true })
+      try {
+        const payload = await getJson('/usage')
+        store.set({
+          usage: {
+            available: payload.available === true,
+            reason: payload.reason ?? '',
+            byName: payload.byName ?? {},
+            sessions: payload.sessions ?? 0,
+            scannedAt: payload.scannedAt ?? 0,
+          },
+          usageLoading: false,
+        })
+      } catch {
+        // The panel is still perfectly usable without a tally, so a failure here
+        // is a line of explanatory text rather than an error page.
+        store.set({ usage: { available: false, reason: 'error', byName: {}, sessions: 0 }, usageLoading: false })
       }
     }
 
@@ -1472,6 +1533,18 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
       if (typeof value !== 'string' || value === '') return ''
       const parsed = new Date(value)
       return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10)
+    }
+
+    /** Substitute `{name}` placeholders, so a translation can reorder them. */
+    function fill(template, params) {
+      return String(template).replace(/\{(\w+)\}/g, (whole, key) => (key in params ? String(params[key]) : whole))
+    }
+
+    /** Format a last-used timestamp as a plain date, matching {@link day}. */
+    function lastUsed(value) {
+      const when = Number(value)
+      if (!Number.isFinite(when) || when <= 0) return ''
+      return new Date(when).toISOString().slice(0, 10)
     }
 
     /** Format a star count compactly. */
@@ -2142,14 +2215,57 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
       return [...buckets.values()]
     }
 
+    /**
+     * Why the usage tally is missing, in the user's language.
+     *
+     * The three reasons are not interchangeable: an old Node cannot decode the
+     * logs at all, a missing log directory means nothing has ever run on this
+     * machine, and a rejection is a bug in this plugin. Folding them into one
+     * "no data" line would bury the one worth reporting.
+     */
+    function usageReasonText(reason, t) {
+      if (reason === 'unsupported') return t('usageUnsupported')
+      if (reason === 'no-sessions-dir') return t('usageNoLogs')
+      return t('usageFailed')
+    }
+
     /** The installed-skill inventory, plus the recoverable-delete list. */
     function InstalledPane({ store, state, t }) {
-      const skills = state.installed.skills ?? []
+      const inventory = state.installed.skills ?? []
       const roots = state.installed.roots ?? []
       const trash = state.trash ?? []
-      const managed = skills.filter((skill) => skill.source === 'user-dsh')
+      const managed = inventory.filter((skill) => skill.source === 'user-dsh')
       const grouped = state.groupSources !== false
-      const withdrawn = skills.filter((skill) => skill.modelInvocable === false)
+      const withdrawn = inventory.filter((skill) => skill.modelInvocable === false)
+      // `undefined` means the tally has not arrived (or cannot be produced on
+      // this runtime), which is a different thing from a tally of zero. Every
+      // usage affordance below is gated on this rather than on `usedCount > 0`,
+      // so a machine where nothing has ever run still gets told why the column
+      // is empty instead of being shown an empty column.
+      const tally = state.usage?.available === true ? state.usage.byName ?? {} : undefined
+      const callsOf = (skill) => Number(tally?.[skill.name]?.calls) || 0
+      const usageFilter = state.usageFilter ?? ''
+      const skills =
+        tally === undefined || usageFilter === ''
+          ? inventory
+          : inventory.filter((skill) => (usageFilter === 'used' ? callsOf(skill) > 0 : callsOf(skill) === 0))
+      const usedCount = tally === undefined ? 0 : inventory.filter((skill) => callsOf(skill) > 0).length
+
+      /**
+       * The "you actually run this" tag.
+       *
+       * Only rendered for skills that have run. A never-used skill is the
+       * default state of most of the list, and stamping the default onto every
+       * row is noise that buries the handful of rows that matter. Answering
+       * "which ones have I never touched?" is the filter's job, not the row's.
+       */
+      function usageTag(skill) {
+        const calls = callsOf(skill)
+        if (tally === undefined || calls === 0) return null
+        const when = lastUsed(tally[skill.name]?.lastUsedAt)
+        const hint = when === '' ? t('usageHint') : `${fill(t('usageLast'), { when })}\n${t('usageHint')}`
+        return e('span', { className: 'sc-tag sc-ok', title: hint }, fill(t('usageUsed'), { n: calls }))
+      }
 
       /** One installed skill, with its switch and the actions its root allows. */
       function skillRow(skill) {
@@ -2171,6 +2287,7 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
               'div',
               { className: 'sc-meta' },
               e('span', { className: 'sc-tag sc-brand' }, skill.source),
+              usageTag(skill),
               origin ? e('span', null, origin) : null,
               e('span', null, `${skill.fileCount ?? 0} ${t('filesCount')}`),
               e('span', null, bytes(skill.bytes)),
@@ -2242,7 +2359,18 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
           'div',
           { className: 'sc-h2' },
           t('installed'),
-          e('span', { className: 'sc-tag' }, `${skills.length}`),
+          e('span', { className: 'sc-tag' }, skills.length === inventory.length ? `${inventory.length}` : `${skills.length} / ${inventory.length}`),
+          tally !== undefined && usedCount > 0
+            ? e('span', { className: 'sc-tag sc-ok', title: t('usageHint') }, fill(t('usageSummary'), { n: usedCount }))
+            : null,
+          // A tally that arrived and found nothing needs the same sentence as a
+          // tally that never arrived, for the opposite reason: there is no chip
+          // to hover, so without this the column is empty and unexplained.
+          tally !== undefined && usedCount === 0 ? e('span', { className: 'sc-hint' }, t('usageHint')) : null,
+          tally === undefined && state.usageLoading === true ? e('span', { className: 'sc-hint' }, t('usageScanning')) : null,
+          tally === undefined && state.usageLoading !== true
+            ? e('span', { className: 'sc-hint' }, usageReasonText(state.usage?.reason, t))
+            : null,
           withdrawn.length > 0
             ? e('span', { className: 'sc-tag sc-warn' }, `${withdrawn.length} ${t('groupDisabledChip')}`)
             : null,
@@ -2259,10 +2387,32 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
           'div',
           { className: 'sc-status' },
           ...roots.map((root) => e('span', { key: root.path, className: 'sc-tag' }, root.label)),
-          skills.length > 0
+          tally !== undefined && inventory.length > 0
             ? e(
                 'div',
                 { className: 'sc-seg', style: { marginLeft: 'auto' } },
+                ...[['', t('usageFilterAll')], ['used', t('usageFilterUsed')], ['unused', t('usageFilterUnused')]].map(([key, label]) =>
+                  e(
+                    'button',
+                    {
+                      className: 'sc-segbtn',
+                      type: 'button',
+                      key: key === '' ? 'all' : key,
+                      'aria-pressed': usageFilter === key ? 'true' : 'false',
+                      onClick: () => store.set({ usageFilter: key }),
+                    },
+                    label,
+                  ),
+                ),
+              )
+            : null,
+          // Gated on the inventory rather than on the filtered list: a filter
+          // that empties the list must not also remove the control that undoes
+          // it, or the only way back is to reload the panel.
+          inventory.length > 0
+            ? e(
+                'div',
+                { className: 'sc-seg', style: tally === undefined ? { marginLeft: 'auto' } : null },
                 e('button', { className: 'sc-segbtn', type: 'button', 'aria-pressed': grouped ? 'true' : 'false',
                   onClick: () => store.set({ groupSources: true }) }, t('groupSource')),
                 e('button', { className: 'sc-segbtn', type: 'button', 'aria-pressed': grouped ? 'false' : 'true',
@@ -2272,8 +2422,8 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
         ),
         skills.length === 0
           ? e('div', { className: 'sc-center' }, e(Icon, { name: 'inbox', size: 26 }),
-              e('div', { className: 'sc-empty-t' }, t('empty')),
-              e('div', { className: 'sc-empty-h' }, t('emptyHint')))
+              e('div', { className: 'sc-empty-t' }, usageFilter === '' ? t('empty') : t('usageFilterEmpty')),
+              e('div', { className: 'sc-empty-h' }, usageFilter === '' ? t('emptyHint') : t('usageFilterEmptyHint')))
           : grouped
             ? e('div', { className: 'sc-groups' }, ...groupBySource(skills).map(sourceGroup))
             : e('div', { className: 'sc-rows' }, ...skills.map(skillRow)),

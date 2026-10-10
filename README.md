@@ -13,11 +13,11 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 | | |
 | --- | --- |
 | ![同名冲突](docs/screenshots/conflict-dark.png) | ![本机导入](docs/screenshots/local-light.png) |
-| 占名、缺件、不完整、名字不合法：四种坏法各配自己的后果与选项 | 扫描 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来 |
+| 占名、缺件、不完整、名字不合法：四种坏法各配自己的后果与选项 | 扫描 35 个别的 agent 技能目录，把 DSH 看不见的技能导进来 |
 | ![已安装](docs/screenshots/installed-light.png) | ![深色主题](docs/screenshots/browse-dark.png) |
 | 装完之后的状态：来路、更新检查、调用开关、回收站 | 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
 
-面板分三块。**发现**聚合 5 个来源的技能目录，能按中英文关键词搜，也能按分类和 star 排序。**已安装**直接读你本机的 `~/.dsh/skills`，把每个技能的来源、文件数和校验结果列出来，并且可以就地开关（关掉不等于删掉，见下面「关掉一个技能」）。**本机**扫的是 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来。
+面板分三块。**发现**聚合 5 个来源的技能目录，能按中英文关键词搜，也能按分类和 star 排序。**已安装**直接读你本机的 `~/.dsh/skills`，把每个技能的来源、文件数和校验结果列出来，并且可以就地开关（关掉不等于删掉，见下面「关掉一个技能」），还能告诉你每个技能被模型调用过几次。**本机**扫的是 35 个别家 agent 的目录，把 DSH 看不见的技能导进来。
 
 想看清楚再动手就进详情页：仓库目录树、`SKILL.md` 原文、逐个文件预览。确认后写到 `~/.dsh/skills/<name>/`，harness 的 chokidar 立刻侦测得到，不用重启。
 
@@ -101,7 +101,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 `lib/` 下的宿主代码改动仍需要重启。
 
 本包没有任何运行时依赖：`dependencies` 是空的，装下去的就是 `lib/`、`client/`、`locale/`
-和两个清单文件，22 个文件、97.5 kB 打包（解开 327.7 kB）。对 `@deepseek-ai/dsh` 的依赖写在
+和两个清单文件，23 个文件、115.5 kB 打包（解开 382.8 kB）。对 `@deepseek-ai/dsh` 的依赖写在
 `peerDependencies` 里（`>=0.2.0-rc.2`）并标了 `optional`。它是一道版本门禁，不是要去安装的
 东西：DSH 读这个字段判断插件和当前运行时兼不兼容，pnpm 则因为 `optional` 不会去装第二份宿主。
 
@@ -160,6 +160,66 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 
 ---
 
+## 数得出来的调用次数
+
+「已安装」页每个跑过的技能会挂一个「用过 N 次」，鼠标停上去显示最后一次是哪天。数据不是猜的：
+技能调用在会话日志里就是一次工具调用，工具名 `skill`，参数里带着技能名。读 `~/.dsh/sessions/`
+下的 `session.v4.jsonl.zstd` 数出来就行。
+
+只有一个坑，而且它很安静：**那些日志是多帧 zstd**——每次追加是一帧，一个文件里拼着好几帧。
+`zlib.zstdDecompressSync` 只解第一帧就返回，不报错：一个 121,404 字节的日志会「成功」解成 284
+字节，解出来还是合法 JSON。所以 `lib/usage.js` 自己按魔数 `28 B5 2F FD` 切帧、逐帧解。顺带的好处
+是峰值内存只有一帧，不是整个档。本机 87 个会话、64 MB 压缩，冷读一次 1.9 秒，之后每次 7 毫秒
+（按文件大小和 mtime 复用）。所以它是一条单独的 `/usage` 路由：列表先画出来，计数随后到，
+首屏不压在这一次解压后面。
+
+值得先说清楚一件事，免得装上去以为坏了：**这台机器上装了大约 40 个技能，历史上只调用过 6 个**
+（`nature-writing` 3 次，其余各 1 次，合计 9 次）。装了不用是常态，所以面板不把「0 次」铺在每一行
+上——只给真跑过的打标签，想知道哪些从来没碰过就用页头那个筛选器。页头还会直接写「用过 6 个」。
+
+另外，「没有数据」和「一次也没用过」是两个答案，面板不合并它们。Node 22.15 之前没有
+`zstdDecompressSync`，那时整个功能报「这个 Node 读不了会话日志」，而不是显示一排 0；日志目录不存在
+也一样。
+
+---
+
+## 「本机」到底扫哪些目录
+
+35 个：21 个用户级（`~/.claude/skills`、`~/.codex/skills`、`~/.gemini/skills`、
+`~/.config/opencode/skills`、`~/.codeium/windsurf/skills`、`~/.windsurf/skills`、
+`~/.trae/skills`、`~/.trae-cn/skills`、`~/.qoder/skills`、`~/.qoder-cn/skills`、
+`~/.lingma/skills`、`~/.openclaw/skills`、`~/.clawdbot/skills`、`~/.cc-switch/skills`、
+`~/.roo/skills`、`~/.codebuddy/skills`、`~/.workbuddy/skills`、`~/.copilot/skills`、
+`~/.cursor/skills`、`~/.gemini/antigravity/skills`，以及 `~/.agents/skills`），
+14 个项目级（`<项目>/.claude/skills`、`.codex`、`.gemini`、`.cursor`、`.github`、
+`.opencode`、`.windsurf`、`.trae`、`.trae-cn`、`.qoder`、`.roo`、`.codebuddy`、
+`.workbuddy`，和没有归属者的 `<项目>/skills`），外加你自己在配置里加的路径。
+
+这张表故意写得很笨：一个 agent 一行，路径照它自己文档里写的抄，相邻的绝不类推。
+理由是不对称的——少一行，用户会在「本机」看到一个空列表，然后认为这台机器上没有别的东西；
+多一行指错了地方，`readdir` 要么什么也没找到（同样看不见），要么那个目录碰巧存在，
+于是从一个没有任何 agent 写过的目录里导入。两种情况都不报错。
+
+这条不对称不是假想的。这张表原来只有 6 行（Claude Code、Codex、Agents、Gemini、
+Antigravity 和 Claude Code 的项目级）。扩到 35 行之后，同一台机器上多扫出
+17 个技能——它们在 `~/.workbuddy/skills` 里，而旧表根本没写这个目录。
+这不是「顺便多支持了几个工具」，是那 17 个技能在这之前一直不存在于这个面板里。
+
+用户级的那 21 行可以用环境变量改基准目录：`DSH_CLAUDE_HOME`、`DSH_CODEX_HOME`、
+`DSH_GEMINI_HOME`、`DSH_OPENCODE_HOME`、`DSH_CURSOR_HOME`、`DSH_COPILOT_HOME`、
+`DSH_WINDSURF_HOME`、`DSH_WINDSURF_USER_HOME`、`DSH_TRAE_HOME`、`DSH_TRAE_CN_HOME`、
+`DSH_QODER_HOME`、`DSH_QODER_CN_HOME`、`DSH_LINGMA_HOME`、`DSH_OPENCLAW_HOME`、
+`DSH_CLAWDBOT_HOME`、`DSH_ROO_HOME`、`DSH_CODEBUDDY_HOME`、`DSH_WORKBUDDY_HOME`、
+`DSH_AGENTS_HOME`。这套名字和 `@michengai/dsh-skills-manager` 用的是同一套，
+所以为那个插件配过环境变量的机器不用再配第二遍。
+
+`docs/probe-roots.mjs` 问的就是这张表本身，而不是它的行为：这个 id 在这个 home 下解析到
+哪个路径、覆盖变量改了谁、给了环境变量它就照办、没给就一个都不看。最后一条是让这个探针
+在本机上仍然诚实的原因——如果哪天有人把 `env` 透传成 `process.env`，探针会在一个本身
+设了 `DSH_CLAUDE_HOME` 的机器上开始飘。
+
+---
+
 ## 数据来源
 
 | 来源 | 用途 | 需要密钥 |
@@ -190,6 +250,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 | GET | `/agents` | 扫描其他 Agent 的技能目录（`~/.claude/skills` 等） |
 | GET | `/trash` | 列出回收站 |
 | GET | `/updates` | 对所有受管理技能做一次更新检查 |
+| GET | `/usage` | 数每个技能被调用过几次（`?force=1` 忽略缓存重扫） |
 | POST | `/item` | 取详情（含 `SKILL.md` 原文） |
 | POST | `/preview` | 取待安装文件清单 + 体检 + 完整性 + 引用缺件 + 同名冲突 + `revision`（本次读的是哪个 commit） |
 | POST | `/install` | 落地到 `~/.dsh/skills/<name>/`；`conflict` 取 `fail`（默认）/`skip`/`rename`/`replace` |
@@ -211,6 +272,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 - `/toggle` 是唯一的例外，它按设计会写工作区里的技能：`~/.dsh/skills`、`<cwd>/.dsh/skills`、`<cwd>/.agents/skills` 三个根，且只改 `SKILL.md` frontmatter 里的一个布尔字段，不新建、不移动、不删除文件。
 - `/import-local` 不信任客户端报上来的路径：它重新扫描一遍 agent 目录，并要求请求里的路径确实出现在扫描结果里。否则这条路由就是一个任意文件读取原语。
 - 导入是复制，不是把外部目录注册进来。就地注册的话，卸载本插件会连带删掉你的 Claude Code 配置，而且在 DSH 里编辑会改到别的 agent。
+- 那张 35 行的目录表是只读的：它 list 一遍、读一遍 `SKILL.md`，从不往别家 agent 的目录里写任何东西。唯一的例外是 `/import-local`，而它写的是 `~/.dsh/skills`，也就是你自己的 DSH 技能根。
 
 > 插件的 `exact`/`prefix` 路由注册在裸 `webServer` 上，匹配优先于 DSH 自己的 `/api` 围栏，围栏看不到它们，所以同源校验必须自己做。
 
@@ -237,12 +299,14 @@ node docs/probe-npm-install.mjs  # 从 npm 装进一个用完就删的 profile�
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
-node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
+node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果（扫本机真实目录）
+node docs/probe-roots.mjs      # 那张目录表本身：每个 id 解析到哪个路径、覆盖变量改了谁（临时目录，不碰本机）
 node docs/probe-tarball.mjs    # tar.gz 解码器（合成包 + 一个真实仓库）
 node docs/probe-freshness.mjs  # 按 commit 钉住、整棵树比对与缓存命中（真实网络）
 node docs/probe-glass.mjs      # 抽屉在玻璃主题下还实不实、设置页里有没有多铺一张底板（先跑一次 preview.mjs）
 node docs/probe-rail.mjs       # 每个来源标签是否都在屏幕里（先跑一次 preview.mjs）
 node docs/probe-toggle.mjs     # 调用开关：翻过去是宿主认的那个值吗、翻回来是原来那份字节吗
+node docs/probe-usage.mjs      # 调用次数：多帧日志真的全读到了吗（合成日志，不读本机会话档）
 ```
 
 两个冒烟测试都不碰真实的 `~/.dsh/skills`（宿主测试写进 `mkdtemp` 临时目录）。
@@ -325,6 +389,7 @@ asar 里的 JS）。`probe-npm-install.mjs` 直接调那个二进制，不走 `.
 - `lib/provenance.js` 安装来路记录（`<root>/.skill-center.json`），含整棵树的哈希
 - `lib/updates.js` 按来路记录比对上游：先比 commit，必要时再比整棵树
 - `lib/agents.js` 其他 Agent 技能目录的发现与导入
+- `lib/usage.js` 会话日志里数技能调用次数（自己按魔数切多帧 zstd）
 - `lib/frontmatter.js` `SKILL.md` frontmatter 解析
 - `lib/http.js` `sendJson` / `readJsonBody` / `sameOrigin`
 - `lib/net.js` 带超时、重试、缓存的上游抓取
@@ -342,6 +407,9 @@ asar 里的 JS）。`probe-npm-install.mjs` 直接调那个二进制，不走 `.
 
 不要按 peer 自身的版本号写 `peerDependencies`：DSH 的门禁是拿 range 去和 dsh 自己的
 版本做 `semver.satisfies`，所以 `"@deepseek-ai/cordis": "~4.0.4"` 这种写法语义是错的。
+
+`engines.node` 写的是 `>=20`，但调用次数这一项要 Node 22.15 才有 `zlib.zstdDecompressSync`。
+低版本上插件照常工作，只是这一项会说明自己读不了，而不是显示一排 0。
 
 想查某个 UI 插槽的契约：
 
