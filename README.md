@@ -101,7 +101,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 `lib/` 下的宿主代码改动仍需要重启。
 
 本包没有任何运行时依赖：`dependencies` 是空的，装下去的就是 `lib/`、`client/`、`locale/`
-和两个清单文件，22 个文件、96.7 kB 打包（解开 326.2 kB）。对 `@deepseek-ai/dsh` 的依赖写在
+和两个清单文件，22 个文件、97.5 kB 打包（解开 327.7 kB）。对 `@deepseek-ai/dsh` 的依赖写在
 `peerDependencies` 里（`>=0.2.0-rc.2`）并标了 `optional`。它是一道版本门禁，不是要去安装的
 东西：DSH 读这个字段判断插件和当前运行时兼不兼容，pnpm 则因为 `optional` 不会去装第二份宿主。
 
@@ -210,6 +210,7 @@ node docs/probe-agents.mjs     # 其他 Agent 技能目录的发现结果
 node docs/probe-tarball.mjs    # tar.gz 解码器（合成包 + 一个真实仓库）
 node docs/probe-freshness.mjs  # 按 commit 钉住、整棵树比对与缓存命中（真实网络）
 node docs/probe-glass.mjs      # 抽屉在玻璃主题下还实不实、设置页里有没有多铺一张底板（先跑一次 preview.mjs）
+node docs/probe-rail.mjs       # 每个来源标签是否都在屏幕里（先跑一次 preview.mjs）
 ```
 
 两个冒烟测试都不碰真实的 `~/.dsh/skills`（宿主测试写进 `mkdtemp` 临时目录）。
@@ -270,6 +271,14 @@ asar 里的 JS）。`probe-npm-install.mjs` 直接调那个二进制，不走 `.
 它顺手把两种渲染都拍下来（`preview/glass-<theme>-before.png` 与 `glass-<theme>.png`，
 一张是原来的样子、一张是现在的样子）。判断对错的不是这些图，是那十二个数；图是给会去看
 的人看的，免得他先把断言信了。
+
+**来源标签一行放不下就换行，不横滚。** 原来是一行到底、放不下就左右滚，右边缘还加了一道
+渐隐遮罩，想让被切掉的标签看起来像「还有更多」。遮罩不是提示：一个来源可以整个落在边缘
+外面，而唯一能发现它的办法是去滚一条根本不画滚动条的带子。有人就是这么中招的——靠无意间
+按了一下方向键才看见「DSH 技能包」。现在 `.sc-sources` 会换行，`flex-basis: 600px` 是五个
+标签一行所需的宽度：要不到这么多，它就落到视图切换下面独占一行；要得到（设置页），它还
+在原处。`docs/probe-rail.mjs` 只问一个截图答不上来的问题：每个标签是不是都在自己的容器
+里。它问两遍，第二遍把旧声明强制加回去，因为一个不可能失败的检查不算检查。
 
 ### 文件
 

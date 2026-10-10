@@ -407,7 +407,7 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
 
 /* ------------------------------------------------------------ source rail */
 
-.sc-tabs { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; }
+.sc-tabs { display: flex; align-items: center; gap: 10px; padding: 0 20px 10px; flex-wrap: wrap; }
 .sc-seg {
   flex: none; display: inline-flex; gap: 2px; padding: 2px;
   border-radius: 999px; background: var(--dsw-alias-markdown-tag, rgba(127,127,127,.10));
@@ -424,15 +424,20 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
   box-shadow: var(--dsw-shadow-lv1, 0 1px 2px rgba(0,0,0,.10));
   font-weight: 500;
 }
-/* One row, always: the rail scrolls instead of wrapping. The right edge is
-   masked so a clipped chip reads as "there is more" rather than as a bug. */
+/* The rail wraps instead of scrolling. It used to be one row with a mask on the
+   right edge, and a mask is not an affordance: a source can sit entirely past
+   the edge, and the only way to learn it exists is to scroll a strip that has
+   no scrollbar. The report was exactly that -- a user found "DSH skill packs"
+   by accidentally pressing an arrow key.
+
+   The 600px basis is the width five source chips want in one line. Ask for
+   that much and the rail drops below the view switch whenever it cannot get
+   it, which is the honest layout: a row of chips that fits, rather than a row
+   of chips squeezed beside the switch and broken over two lines. Where there
+   is room -- the settings page -- it stays on the same line as before. */
 .sc-sources {
-  flex: 1; min-width: 0; display: flex; gap: 6px; overflow-x: auto; overflow-y: hidden;
-  scrollbar-width: none; padding: 2px 0; padding-right: 26px;
-  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
-  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  flex: 1 1 600px; min-width: 0; display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0;
 }
-.sc-sources::-webkit-scrollbar { height: 0; }
 .sc-src {
   flex: none; height: 26px; padding: 0 10px; border-radius: 999px; cursor: pointer; font: inherit;
   font-size: 12px; white-space: nowrap;
@@ -2238,7 +2243,9 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
       )
 
       // The view switch and the source rail are different kinds of choice, so
-      // they get different controls: a segmented toggle, then a scrolling row.
+      // they get different controls: a segmented toggle, then a row of chips.
+      // Both wrap, because a source that is scrolled out of sight is a source
+      // the user does not have.
       const tabs = e(
         'div',
         { className: 'sc-tabs' },
