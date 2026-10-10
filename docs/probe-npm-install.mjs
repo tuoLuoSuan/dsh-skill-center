@@ -23,8 +23,19 @@ const PACKAGE = 'dsh-skill-center'
  * The default is the registry spec, not a local tarball. Installing the version
  * that is actually published is the thing a stranger does; reading the tarball
  * only proves the tarball is fine. Pass a path to test a local pack instead.
+ *
+ * The version is pinned, and that is the whole point of this probe. A bare name
+ * does NOT resolve to `latest`: pnpm 11 ships a release cooldown (its built-in
+ * `minimumReleaseAge`), so for 24 hours after a publish `pnpm add <name>` picks
+ * the newest version older than the window and writes that range into the
+ * profile. Asking for the bare name therefore tests the *previous* release --
+ * which is exactly what this probe did, and it reported "a stranger can install
+ * this" while installing 0.2.2, code from before every feature in 0.4.0. Naming
+ * the version makes the probe test the thing under test; the assertion below
+ * then checks that what landed is what we meant to ship.
  */
-const spec = process.argv[2] ?? PACKAGE
+const local = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
+const spec = process.argv[2] ?? `${PACKAGE}@${local.version}`
 const profileDir = join(HOME, '.dsh', 'profiles', PROFILE)
 
 /*
@@ -154,6 +165,15 @@ if (installed) {
 
   const entry = entries[0]
   if (entry !== undefined) {
+    /*
+     * What landed has to be what we meant to ship. Without this the probe passes
+     * on any version at all, and it did: it printed "a stranger can install this"
+     * over an install of 0.2.2, three releases and every feature behind. The
+     * cooldown above is why the bare name went there; this assertion is why it
+     * will not go there quietly again.
+     */
+    const landed = JSON.parse(readFileSync(join(entry, 'package.json'), 'utf8')).version
+    check('the installed version is the one in package.json', landed === local.version, `installed ${landed}, package.json says ${local.version}`)
     for (const relative of ['lib/index.js', 'client/client.js', 'locale/zh.json', 'cordis.patch.yml', 'icon.svg']) {
       check(`tarball ships ${relative}`, existsSync(join(entry, relative)))
     }

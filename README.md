@@ -85,6 +85,19 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 包名会从 npm 上解析，和你装任何别的 DSH 插件是同一条路。桌面版自带 CLI 的路径随安装位置变化，
 Windows 上在 `<安装目录>\resources\runtime\cli\bin\dsh.cmd`。
 
+**刚发版的那 24 小时里，请把版本号写上**：
+
+```powershell
+dsh plugin --profile <你的 profile> add dsh-skill-center@0.4.0
+```
+
+pnpm 11 自带一个发版冷却期（内置的 `minimumReleaseAge`，默认 24 小时，不写在任何配置文件里，
+`pnpm config get minimumReleaseAge` 返回 `undefined`）。在这段时间里裸包名**不会**解析到 `latest`，
+而是解析到窗口之外最新的那一版，然后把这个范围写进 profile 的 `package.json`。所以 0.4.0 发布后
+跑上面第一条命令，装到的其实是 0.2.2——命令成功、输出干净、没有任何提示。写出版本号就绕开了，
+`--config.minimumReleaseAge=0` 也可以。这条是实测出来的，不是推测：`docs/probe-npm-install.mjs`
+一直打印「陌生人装得上」，直到有人去看它到底装到了哪一版——它装的是 0.2.2。
+
 想改用源码（要改代码、或想跑本仓库里那套检查）：
 
 ```bash
@@ -101,7 +114,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 `lib/` 下的宿主代码改动仍需要重启。
 
 本包没有任何运行时依赖：`dependencies` 是空的，装下去的就是 `lib/`、`client/`、`locale/`
-和两个清单文件，23 个文件、115.5 kB 打包（解开 382.8 kB）。对 `@deepseek-ai/dsh` 的依赖写在
+和两个清单文件，23 个文件、115.9 kB 打包（解开 383.7 kB）。对 `@deepseek-ai/dsh` 的依赖写在
 `peerDependencies` 里（`>=0.2.0-rc.2`）并标了 `optional`。它是一道版本门禁，不是要去安装的
 东西：DSH 读这个字段判断插件和当前运行时兼不兼容，pnpm 则因为 `optional` 不会去装第二份宿主。
 
@@ -295,7 +308,7 @@ node docs/look-at-page.mjs     # 上面那一页渲染出来好不好看（读 H
 node docs/shot-page.mjs        # 把那一页真的截一张图下来，自己看一眼
 node docs/verify-clone.mjs     # clone 一份公开仓库，验证陌生人的 checkout 真的能用
 node docs/probe-npm-install.mjs  # 从 npm 装进一个用完就删的 profile，验证陌生人那条路能用
-                                 # （不带参数时装 registry 上的版本；给个路径则装本地 tarball）
+                                 # （默认装 package.json 里钉住的那一版；给个 spec/路径可改）
 node docs/probe-sources.mjs    # 各上游可达性与契约实测
 node docs/probe-validate.mjs   # frontmatter 体检与改名的往返
 node docs/probe-references.mjs # SKILL.md 引用扫描的误报/漏报
