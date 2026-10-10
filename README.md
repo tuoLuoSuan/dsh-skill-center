@@ -15,9 +15,9 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 | ![同名冲突](docs/screenshots/conflict-dark.png) | ![本机导入](docs/screenshots/local-light.png) |
 | 占名、缺件、不完整、名字不合法：四种坏法各配自己的后果与选项 | 扫描 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来 |
 | ![已安装](docs/screenshots/installed-light.png) | ![深色主题](docs/screenshots/browse-dark.png) |
-| 装完之后的状态：来路、更新检查、回收站 | 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
+| 装完之后的状态：来路、更新检查、调用开关、回收站 | 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
 
-面板分三块。**发现**聚合 5 个来源的技能目录，能按中英文关键词搜，也能按分类和 star 排序。**已安装**直接读你本机的 `~/.dsh/skills`，把每个技能的来源、文件数和校验结果列出来。**本机**扫的是 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来。
+面板分三块。**发现**聚合 5 个来源的技能目录，能按中英文关键词搜，也能按分类和 star 排序。**已安装**直接读你本机的 `~/.dsh/skills`，把每个技能的来源、文件数和校验结果列出来，并且可以就地开关（关掉不等于删掉，见下面「关掉一个技能」）。**本机**扫的是 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来。
 
 想看清楚再动手就进详情页：仓库目录树、`SKILL.md` 原文、逐个文件预览。确认后写到 `~/.dsh/skills/<name>/`，harness 的 chokidar 立刻侦测得到，不用重启。
 
@@ -131,6 +131,35 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 
 ---
 
+## 关掉一个技能，但别把它删掉
+
+「已安装」那一页每个技能右边有一个开关：关掉之后技能还在原处、还能读、还能再打开，
+只是模型不会再看到它。列表按来源分组，每组标题右边还有一个总开关（全组启用 / 全组禁用），
+关掉的技能挂一个 `已禁用` 标签，页头汇一个总数。
+
+开关改的是技能**自己 frontmatter 里的 `disable-model-invocation`**——就是宿主真正读的那个字段，
+不是把文件改名或搬走。这么选换来三件事：
+
+- 技能待在原地，所以列表还列得出来、正文还打得开；改回来只是删掉一行，文档**逐字节**回到原样。
+- 对一个不是本插件装的技能一样能用。
+- 技能目录在 git 仓库里时，改名会显示成一次删除，改一行不会。
+
+写入是**逐字节编辑 frontmatter 那一段**（`setFrontmatterFlag`），不是把 YAML 解析出来再重新序列化：
+手写的注释、缩进、键顺序都留着。`docs/probe-toggle.mjs` 问的正是这件事，而且问三遍——
+翻过去是不是宿主认的那个「关」、翻回来是不是**原来那份字节**、以及一份它改不了的文档
+是不是被**拒绝**而不是写坏。
+
+改不动的会被拒绝，并且说出是哪个字段：frontmatter 里用了宿主不认的旧写法时，
+宿主是**整份丢掉**这个技能的，那么给它写开关就等于报告了一次谁也看不见的变化。
+
+只在三个根上生效：`~/.dsh/skills`、`<工作区>/.dsh/skills`、`<工作区>/.agents/skills`。
+其他 agent 的技能目录（`~/.claude/skills` 等）只读。
+
+请求里 `enabled` 是**必填**的布尔值，不从当前状态推断：先读、再决定、再写，
+是和这份文件的所有其他写入者赛跑，双击还会落在第二次读到的任意一边。
+
+---
+
 ## 数据来源
 
 | 来源 | 用途 | 需要密钥 |
@@ -170,6 +199,7 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 | POST | `/update` | 按来路记录重新拉取并覆盖安装 |
 | POST | `/import-local` | 从发现的 agent 目录导入（复制，不是就地注册） |
 | POST | `/read` | 读已安装技能正文 |
+| POST | `/toggle` | `{ name, enabled }` 改技能 frontmatter 里的 `disable-model-invocation`；`enabled` 必填布尔 |
 
 浏览器永远只跟宿主对话，不直连上游，所以没有 CORS 问题，密钥也不会到前端。
 
@@ -177,7 +207,8 @@ dsh plugin --profile <你的 profile> add "<仓库路径>"
 
 - 每个请求（含 GET）都过同源校验：Host 缺失放行（非浏览器），Host 存在则必须是 loopback 或在 `trustedHosts` 里；`sec-fetch-site: cross-site` 直接拒；Origin 存在但解析失败也拒。
 - 技能名必须匹配 `^[a-z0-9]+(?:-[a-z0-9]+)*$`；安装路径经 `containedChild` 校验，`../` 与绝对路径一律拒绝。
-- 只写 `~/.dsh/skills`；项目根下的技能目录以 `writable: false` 呈现。
+- 只**安装**到 `~/.dsh/skills`；`/remove` 也只动用户根，项目根下的技能目录以 `writable: false` 呈现。
+- `/toggle` 是唯一的例外，它按设计会写工作区里的技能：`~/.dsh/skills`、`<cwd>/.dsh/skills`、`<cwd>/.agents/skills` 三个根，且只改 `SKILL.md` frontmatter 里的一个布尔字段，不新建、不移动、不删除文件。
 - `/import-local` 不信任客户端报上来的路径：它重新扫描一遍 agent 目录，并要求请求里的路径确实出现在扫描结果里。否则这条路由就是一个任意文件读取原语。
 - 导入是复制，不是把外部目录注册进来。就地注册的话，卸载本插件会连带删掉你的 Claude Code 配置，而且在 DSH 里编辑会改到别的 agent。
 
@@ -211,6 +242,7 @@ node docs/probe-tarball.mjs    # tar.gz 解码器（合成包 + 一个真实仓�
 node docs/probe-freshness.mjs  # 按 commit 钉住、整棵树比对与缓存命中（真实网络）
 node docs/probe-glass.mjs      # 抽屉在玻璃主题下还实不实、设置页里有没有多铺一张底板（先跑一次 preview.mjs）
 node docs/probe-rail.mjs       # 每个来源标签是否都在屏幕里（先跑一次 preview.mjs）
+node docs/probe-toggle.mjs     # 调用开关：翻过去是宿主认的那个值吗、翻回来是原来那份字节吗
 ```
 
 两个冒烟测试都不碰真实的 `~/.dsh/skills`（宿主测试写进 `mkdtemp` 临时目录）。

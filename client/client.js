@@ -169,6 +169,23 @@ window.__ModuleLoader__.load({
         partialFiles: ' 个文件没有检查。装上去的技能可能缺文件。',
         refsTitle: '引用了不存在的文件',
         refsMissing: '个 SKILL.md 里提到的文件不在这次取回的目录里。',
+        enable: '启用',
+        disable: '禁用',
+        enabledTag: '已启用',
+        disabledTag: '已禁用',
+        enableHint: '让模型自己决定什么时候用这个技能。',
+        disableHint: '技能留在硬盘上、列表里还在，只是从模型的技能目录里撤下来。',
+        enabledOk: '已放回模型目录：',
+        disabledOk: '已撤下：',
+        groupBy: '分组',
+        groupFlat: '平铺',
+        groupSource: '按来源',
+        groupDisabledChip: '已禁用',
+        toggleAllOn: '全组启用',
+        toggleAllOff: '全组禁用',
+        invocationBroken: 'DSH 会忽略它',
+        invocationBrokenHint: 'frontmatter 里的调用权限写法不对，宿主会整份丢掉这个技能，连同它的名字和描述。',
+        skillUnit: ' 个技能',
       },
       en: {
         nav: 'Skill Center',
@@ -302,6 +319,23 @@ window.__ModuleLoader__.load({
         partialFiles: ' file(s) were not checked. The installed skill may be missing files.',
         refsTitle: 'Points at files that are not there',
         refsMissing: 'file(s) named in SKILL.md are absent from the tree that was fetched.',
+        enable: 'Enable',
+        disable: 'Disable',
+        enabledTag: 'Enabled',
+        disabledTag: 'Disabled',
+        enableHint: 'Let the model decide when to use this skill.',
+        disableHint: 'The skill stays on disk and in this list; it just leaves the model\u2019s catalog.',
+        enabledOk: 'Back in the model\u2019s catalog: ',
+        disabledOk: 'Withdrawn: ',
+        groupBy: 'Group',
+        groupFlat: 'Flat',
+        groupSource: 'By source',
+        groupDisabledChip: 'disabled',
+        toggleAllOn: 'Enable all',
+        toggleAllOff: 'Disable all',
+        invocationBroken: 'DSH will ignore it',
+        invocationBrokenHint: 'The invocation fields in the frontmatter are not the spellings the harness accepts, so it drops the whole file, name and description included.',
+        skillUnit: ' skill(s)',
       },
     }
 
@@ -837,6 +871,57 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
 .sc-foot:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(127,127,127,.10)); color: var(--sc-tone); }
 .sc-foot.sc-rail { justify-content: center; padding: 0; }
 .sc-inline { height: 100%; min-height: 320px; display: flex; flex-direction: column; }
+
+/* ------------------------------------------------------ invocation switches */
+
+/* A switch, not a checkbox: the thing it controls is live. The track keeps its
+   size in both states so a row does not shift when it is flipped, and the
+   "on" state leans on the link accent because that is the only hue this
+   design system spends on emphasis. */
+.sc-switch {
+  flex: none; width: 34px; height: 20px; padding: 0; border-radius: 999px; cursor: pointer;
+  position: relative; background: var(--dsw-alias-bg-layer-3, rgba(127,127,127,.18));
+  border: 1px solid var(--sc-line); transition: background .14s, border-color .14s;
+  margin-top: 1px;
+}
+.sc-switch::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--sc-solid); border: 1px solid var(--sc-line);
+  transition: transform .14s, background .14s;
+}
+.sc-switch[aria-checked="true"] { background: var(--sc-accent); border-color: transparent; }
+.sc-switch[aria-checked="true"]::after { transform: translateX(14px); border-color: transparent; }
+.sc-switch:disabled { opacity: .5; cursor: default; }
+.sc-switch:focus-visible { outline: 2px solid var(--sc-accent); outline-offset: 2px; }
+/* A disabled skill is still listed -- that is the whole point of showing it --
+   so the row says so by receding, not by disappearing. */
+.sc-row.sc-off .sc-name { color: var(--sc-tone-3); }
+.sc-row.sc-off .sc-avatar { opacity: .5; }
+
+.sc-groups { display: flex; flex-direction: column; gap: 14px; }
+.sc-group { display: flex; flex-direction: column; gap: 6px; }
+.sc-grouphead {
+  display: flex; align-items: center; gap: 8px; padding: 0 2px 2px;
+  font-size: 12px; color: var(--sc-tone-2);
+}
+.sc-grouphead .sc-tag { text-transform: none; letter-spacing: 0; }
+.sc-grouphead .sc-grow { flex: 1; min-width: 0; }
+
+/* Two states of one control, so the pair reads as a segmented switch. */
+.sc-seg {
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-3, rgba(127,127,127,.08));
+  border: 1px solid var(--sc-line-soft);
+}
+.sc-seg button, .sc-segbtn {
+  font: inherit; font-size: 12px; padding: 2px 9px; border-radius: 6px; cursor: pointer;
+  background: transparent; border: 1px solid transparent; color: var(--sc-tone-3);
+  transition: background .12s, color .12s;
+}
+.sc-seg button:hover, .sc-segbtn:hover { color: var(--sc-tone); }
+.sc-seg button[aria-pressed="true"], .sc-segbtn[aria-pressed="true"] {
+  background: var(--sc-solid); border-color: var(--sc-line); color: var(--sc-tone);
+}
 `
 
     /* ------------------------------------------------------------------ *
@@ -939,6 +1024,13 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
         sources: [],
         taxonomy: { categories: [], counts: {}, totalItems: 0, uniqueRepos: 0 },
         installed: { skills: [], roots: [], counts: 0, managed: 0 },
+        /**
+         * How the installed list is laid out: one flat list, or one section per
+         * source bucket. Grouping is the default because "did I install this,
+         * or did it come with the workspace" is the first question a list of
+         * twelve skills raises, and the answer is a field of the record.
+         */
+        groupSources: true,
         userRoot: '',
         detail: undefined,
         detailLoading: false,
@@ -1191,6 +1283,50 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
       }
     }
 
+    /**
+     * Move skills between "offered to the model" and "withdrawn".
+     *
+     * Optimistic on purpose. The switch is the only feedback the user gets, so
+     * it flips on the spot and is put back if the host refuses; waiting for a
+     * round trip first would make the one control that is supposed to feel
+     * immediate feel broken instead.
+     *
+     * A group is one request per skill rather than a batch route, because
+     * there is no transaction to be had: a group spans several files that may
+     * live under different roots, and "11 of 12 changed" is a more useful thing
+     * to be told than a rollback that never happened.
+     * @param store - the shared store.
+     * @param names - the skill directory names to move.
+     * @param enabled - the state to move them all to.
+     * @param t - the active translator.
+     * @returns whether every one of them landed.
+     */
+    async function flipSkills(store, names, enabled, t) {
+      if (names.length === 0) return true
+      const previous = store.get().installed?.skills ?? []
+      const wanted = new Set(names)
+      const paint = (skills) => store.set({ installed: { ...store.get().installed, skills } })
+      paint(previous.map((skill) => (wanted.has(skill.name) ? { ...skill, modelInvocable: enabled } : skill)))
+
+      const failed = []
+      for (const name of names) {
+        try {
+          await postJson('/toggle', { name, enabled })
+        } catch (error) {
+          failed.push(`${name}: ${error.message}`)
+        }
+      }
+      await loadInstalled(store)
+      await loadBoot(store)
+
+      const done = names.length - failed.length
+      const what = names.length === 1 ? names[0] : `${done}${t('skillUnit')}`
+      if (failed.length === 0) store.toast(`${enabled ? t('enabledOk') : t('disabledOk')}${what}`, 'ok')
+      else if (done === 0) store.toast(failed[0], 'bad')
+      else store.toast(`${done}/${names.length} · ${failed[0]}`, 'bad')
+      return failed.length === 0
+    }
+
     /** Discover skills sitting in other agents' directories. */
     /**
      * The client half hot-reloads; the host half only changes on restart. So a
@@ -1200,7 +1336,6 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
     function isStaleHost(error) {
       return /no such route/i.test(String(error?.message ?? ''))
     }
-
     async function loadAgents(store) {
       store.set({ agentsLoading: true })
       try {
@@ -1943,6 +2078,32 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
     }
 
     /**
+     * The invocation switch.
+     *
+     * A `button` with `role="switch"` rather than a checkbox: flipping it
+     * changes what the model can see the moment it is clicked, so there is no
+     * form to submit and nothing to save. `aria-checked` carries the state, so
+     * the stylesheet and the accessibility tree read the same attribute and
+     * cannot drift apart into a switch that looks on and says off.
+     * @param props - checked state, tooltip, whether it is usable, and the click handler.
+     */
+    function Switch({ checked, title, disabled, onToggle }) {
+      return e('button', {
+        className: 'sc-switch',
+        type: 'button',
+        role: 'switch',
+        'aria-checked': checked ? 'true' : 'false',
+        'aria-label': title,
+        title,
+        // A document the harness refuses gets a switch that cannot be moved,
+        // because moving it would write a flag into a file that is being
+        // dropped whole -- a change with nothing to show for it.
+        disabled: disabled === true,
+        onClick: onToggle,
+      })
+    }
+
+    /**
      * Where an installed skill came from, in one line.
      * @param skill - one installed-skill record.
      * @param t - translator.
@@ -1961,12 +2122,119 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
         : base
     }
 
+    /**
+     * Bucket installed skills by the root that produced them.
+     *
+     * The bucket key is the source, not the label, because two roots can share
+     * a label and a source cannot. Order follows the order the host reported
+     * the roots in, which is the harness's own precedence -- a group that
+     * reorders itself between refreshes would be unreadable.
+     * @param skills - the installed-skill records, already sorted by name.
+     * @returns one bucket per source, each keeping its skills in that order.
+     */
+    function groupBySource(skills) {
+      const buckets = new Map()
+      for (const skill of skills) {
+        const key = skill.source ?? 'unknown'
+        if (!buckets.has(key)) buckets.set(key, { key, label: skill.rootLabel ?? key, path: skill.root ?? '', skills: [] })
+        buckets.get(key).skills.push(skill)
+      }
+      return [...buckets.values()]
+    }
+
     /** The installed-skill inventory, plus the recoverable-delete list. */
     function InstalledPane({ store, state, t }) {
       const skills = state.installed.skills ?? []
       const roots = state.installed.roots ?? []
       const trash = state.trash ?? []
       const managed = skills.filter((skill) => skill.source === 'user-dsh')
+      const grouped = state.groupSources !== false
+      const withdrawn = skills.filter((skill) => skill.modelInvocable === false)
+
+      /** One installed skill, with its switch and the actions its root allows. */
+      function skillRow(skill) {
+        const status = skill.provenance?.update?.status
+        const origin = originOf(skill, t)
+        const writable = skill.source === 'user-dsh'
+        const on = skill.modelInvocable !== false
+        const broken = Array.isArray(skill.invocationProblems) ? skill.invocationProblems : []
+        return e(
+          'div',
+          { className: on ? 'sc-row' : 'sc-row sc-off', key: `${skill.source}/${skill.name}` },
+          e('span', { className: 'sc-avatar' }, initial(skill.name)),
+          e(
+            'div',
+            { className: 'sc-grow' },
+            e('div', { className: 'sc-name' }, skill.name),
+            e('div', { className: 'sc-desc' }, skill.description || t('noDescription')),
+            e(
+              'div',
+              { className: 'sc-meta' },
+              e('span', { className: 'sc-tag sc-brand' }, skill.source),
+              origin ? e('span', null, origin) : null,
+              e('span', null, `${skill.fileCount ?? 0} ${t('filesCount')}`),
+              e('span', null, bytes(skill.bytes)),
+              on ? null : e('span', { className: 'sc-tag' }, t('disabledTag')),
+              skill.valid === false ? e('span', { className: 'sc-tag sc-warn' }, t('willBeIgnored')) : null,
+              // A frontmatter the harness refuses is a skill that is on disk and
+              // absent from the catalog. Saying so is the difference between a
+              // bug report and a mystery.
+              broken.length > 0
+                ? e('span', { className: 'sc-tag sc-warn', title: `${t('invocationBrokenHint')}\n\n${broken.join('\n')}` }, t('invocationBroken'))
+                : null,
+              UpdateBadge({ skill, t }),
+            ),
+          ),
+          e(Switch, {
+            checked: on,
+            disabled: broken.length > 0,
+            title: broken.length > 0 ? t('invocationBrokenHint') : on ? t('disableHint') : t('enableHint'),
+            onToggle: () => void flipSkills(store, [skill.name], !on, t),
+          }),
+          writable && status === 'update'
+            ? e(
+                'button',
+                { className: 'sc-btn sc-sm', type: 'button', disabled: state.busy === `update:${skill.name}`,
+                  onClick: () => void updateSkill(store, skill.name, t) },
+                e(Icon, { name: 'download', size: 12 }),
+                t('update'),
+              )
+            : null,
+          writable
+            ? e(
+                'button',
+                { className: 'sc-iconbtn sc-danger', type: 'button', title: t('remove'),
+                  onClick: () => void removeInstalled(store, skill.name, t('removeConfirm'), t) },
+                e(Icon, { name: 'trash' }),
+              )
+            : null,
+        )
+      }
+
+      /** One source bucket, with a master switch that moves the whole group. */
+      function sourceGroup(group) {
+        const allOn = group.skills.every((skill) => skill.modelInvocable !== false)
+        const off = group.skills.filter((skill) => skill.modelInvocable === false).length
+        return e(
+          'div',
+          { className: 'sc-group', key: group.key },
+          e(
+            'div',
+            { className: 'sc-grouphead' },
+            e('span', null, group.label),
+            e('span', { className: 'sc-tag' }, `${group.skills.length}`),
+            off > 0 ? e('span', { className: 'sc-tag sc-warn' }, `${off} ${t('groupDisabledChip')}`) : null,
+            e('span', { className: 'sc-grow' }),
+            e(Switch, {
+              checked: allOn,
+              title: allOn ? t('toggleAllOff') : t('toggleAllOn'),
+              onToggle: () => void flipSkills(store, group.skills.map((skill) => skill.name), !allOn, t),
+            }),
+          ),
+          e('div', { className: 'sc-rows' }, ...group.skills.map(skillRow)),
+        )
+      }
+
       return e(
         'div',
         null,
@@ -1975,6 +2243,9 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
           { className: 'sc-h2' },
           t('installed'),
           e('span', { className: 'sc-tag' }, `${skills.length}`),
+          withdrawn.length > 0
+            ? e('span', { className: 'sc-tag sc-warn' }, `${withdrawn.length} ${t('groupDisabledChip')}`)
+            : null,
           managed.length > 0 && state.hostStale !== true
             ? e(
                 'button',
@@ -1987,62 +2258,25 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
         e(
           'div',
           { className: 'sc-status' },
-          ...roots.map((root) =>
-            e('span', { key: root.path, className: 'sc-tag' },
-              `${root.label}${root.writable ? '' : ` · ${t('readonly')}`}`),
-          ),
+          ...roots.map((root) => e('span', { key: root.path, className: 'sc-tag' }, root.label)),
+          skills.length > 0
+            ? e(
+                'div',
+                { className: 'sc-seg', style: { marginLeft: 'auto' } },
+                e('button', { className: 'sc-segbtn', type: 'button', 'aria-pressed': grouped ? 'true' : 'false',
+                  onClick: () => store.set({ groupSources: true }) }, t('groupSource')),
+                e('button', { className: 'sc-segbtn', type: 'button', 'aria-pressed': grouped ? 'false' : 'true',
+                  onClick: () => store.set({ groupSources: false }) }, t('groupFlat')),
+              )
+            : null,
         ),
         skills.length === 0
           ? e('div', { className: 'sc-center' }, e(Icon, { name: 'inbox', size: 26 }),
               e('div', { className: 'sc-empty-t' }, t('empty')),
               e('div', { className: 'sc-empty-h' }, t('emptyHint')))
-          : e(
-              'div',
-              { className: 'sc-rows' },
-              ...skills.map((skill) => {
-                const status = skill.provenance?.update?.status
-                const origin = originOf(skill, t)
-                const writable = skill.source === 'user-dsh'
-                return e(
-                  'div',
-                  { className: 'sc-row', key: `${skill.source}/${skill.name}` },
-                  e('span', { className: 'sc-avatar' }, initial(skill.name)),
-                  e(
-                    'div',
-                    { className: 'sc-grow' },
-                    e('div', { className: 'sc-name' }, skill.name),
-                    e('div', { className: 'sc-desc' }, skill.description || t('noDescription')),
-                    e(
-                      'div',
-                      { className: 'sc-meta' },
-                      e('span', { className: 'sc-tag sc-brand' }, skill.source),
-                      origin ? e('span', null, origin) : null,
-                      e('span', null, `${skill.fileCount ?? 0} ${t('filesCount')}`),
-                      e('span', null, bytes(skill.bytes)),
-                      skill.valid === false ? e('span', { className: 'sc-tag sc-warn' }, t('willBeIgnored')) : null,
-                      UpdateBadge({ skill, t }),
-                    ),
-                  ),
-                  writable && status === 'update'
-                    ? e(
-                        'button',
-                        { className: 'sc-btn sc-sm', type: 'button', disabled: state.busy === `update:${skill.name}`,
-                          onClick: () => void updateSkill(store, skill.name, t) },
-                        e(Icon, { name: 'download', size: 12 }),
-                        t('update'),
-                      )
-                    : null,
-                  writable
-                    ? e(
-                        'button',
-                        { className: 'sc-iconbtn sc-danger', type: 'button', title: t('remove'),
-                          onClick: () => void removeInstalled(store, skill.name, t('removeConfirm'), t) },
-                        e(Icon, { name: 'trash' }),
-                      )
-                    : null,
-                )
-              }),
-            ),
+          : grouped
+            ? e('div', { className: 'sc-groups' }, ...groupBySource(skills).map(sourceGroup))
+            : e('div', { className: 'sc-rows' }, ...skills.map(skillRow)),
         trash.length > 0
           ? e(
               'div',
