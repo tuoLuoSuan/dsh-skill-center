@@ -211,14 +211,18 @@ try {
     const install = await post('/install', { entry: target })
     check('POST /install → 200', install.status === 200, install.body?.error ?? install.body?.directory)
     check('installed name is grammar-valid', /^[a-z0-9]+(-[a-z0-9]+)*$/.test(String(install.body?.name ?? '')), install.body?.name)
-    // The revision API can answer for one of these two calls and not the other,
-    // so the requirement is agreement, not presence: if both name a commit they
-    // must name the same one, and the install may only be silent when it too
-    // could not resolve. Within one run the branch cannot move.
+    // The revision API can answer for one of these two calls and not the other:
+    // `resolveCommit` is deliberately uncached, gives the API 15s and no
+    // retries, and swallows any failure into `undefined`. So the preview and the
+    // install are two independent readings of a moving target, and only one
+    // combination is a real contradiction -- two different commits. Silence on
+    // either side is that call's honest report of what it could find out, in
+    // both directions: the install knowing more than the preview is the API
+    // coming back, and knowing less is the API going away. Neither is a lie, and
+    // treating either as one makes this probe report the weather.
+    const previewCommit = typeof revision?.commit === 'string' && revision.commit !== '' ? revision.commit : undefined
     check('the install never disagrees with the preview about the commit',
-      install.body?.commit === undefined
-        ? !pinned || revision?.fetchedVia === 'crawl'
-        : install.body.commit === String(revision?.commit ?? '').slice(0, 7),
+      previewCommit === undefined || install.body?.commit === undefined || install.body.commit === previewCommit.slice(0, 7),
       `install ${install.body?.commit ?? '(none)'} vs preview ${revision?.commit ?? '(none)'}`)
     check('the install is pinned exactly when it names a commit',
       (install.body?.pinned === true) === (typeof install.body?.commit === 'string' && install.body.commit !== ''),

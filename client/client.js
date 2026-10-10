@@ -2459,17 +2459,48 @@ body[data-ds-dark-theme] .sc-scope { --sc-plate: var(--dsw-static-neutral-bluish
      * Plugin body
      * ------------------------------------------------------------------ */
 
-    /** Register the plugin's stylesheet once per activation. */
+    /**
+     * The tag id this bundle's stylesheet is registered under. Unique per
+     * bundle, and the key the re-injection guard below matches on.
+     */
+    const STYLE_TAG_ID = `${NS}/client.css`
+
+    /**
+     * Register the plugin's stylesheet, the way the host's own bundles do.
+     *
+     * Both attributes are load-bearing, and neither is decoration:
+     *
+     * - The host's module loader (`@deepseek-ai/dsh-client-modules`) claims
+     *   every UNTAGGED `<style>` for whichever plugin materializes next. This
+     *   bundle injects its tag from `apply()`, which runs after its own
+     *   materialization, so an untagged tag is still untagged when the next
+     *   plugin boots -- and gets claimed by it.
+     * - The host's hot reloader (`@deepseek-ai/dsh-client-hmr`) then deletes
+     *   `style[data-plugin=<that other plugin>]` whenever that plugin is
+     *   rebuilt. Once our tag has been claimed, updating somebody else's plugin
+     *   takes this stylesheet down while this panel stays mounted: the DOM is
+     *   all there, styled by nothing, which reads as a scrambled interface.
+     *   `data-plugin` is what makes the tag ours and stops that handover.
+     * - `data-plugin-css` is the unique tag id, and the guard keys on it, so a
+     *   second activation adds nothing instead of stacking a second copy.
+     *
+     * The tag is deliberately never removed. That is what the host's bundles do,
+     * and it is the honest lifetime: this stylesheet belongs to the document,
+     * not to a fiber, so a teardown that leaves the panel mounted cannot strip
+     * the panel bare.
+     */
     function attachStyles() {
       const head = document.head ?? document.documentElement
       if (head === null || head === undefined) return () => {}
+      const selector = `style[data-plugin-css=${JSON.stringify(STYLE_TAG_ID)}]`
+      if (typeof document.querySelector === 'function' && document.querySelector(selector) !== null) return () => {}
       const style = document.createElement('style')
+      style.setAttribute('data-plugin', NS)
+      style.setAttribute('data-plugin-css', STYLE_TAG_ID)
       style.setAttribute('data-dsh-skill-center', '')
       style.textContent = CSS
       head.appendChild(style)
-      return () => {
-        style.remove()
-      }
+      return () => {}
     }
 
     /**

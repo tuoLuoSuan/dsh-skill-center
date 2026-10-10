@@ -307,6 +307,24 @@ node docs/extract-slot-catalog.mjs <你解包出来的 dsh-cordis-client-runner/
 node docs/show-slot.mjs sidebar.footer.action
 ```
 
+### 样式表要自己认领，否则会被别人领走
+
+宿主里只有两处代码会动 `<style>` 标签的归属，而它们都只看标签自己的属性：
+
+- `@deepseek-ai/dsh-client-modules` 物化任何插件时，把它那一刻**所有还没打 `data-plugin` 的 `<style>`** 全部盖上那个插件的名字（`claimStyles`，`lib/client.js:172`）。
+- `@deepseek-ai/dsh-client-hmr` 在某个插件热重载时，删掉所有 `style[data-plugin=<它>]`（`removeOwnedStyles`，`lib/client.js:54,80`）。
+
+这个 bundle 的样式表是在 `apply()` 里注入的，**而 `apply()` 跑在自己的物化之后**——那一刻 `claimStyles` 已经错过，标签是「无主」的。于是之后**任何一个别的插件**物化都会把它领走；用户下次更新那个插件时，宿主就顺手把技能中心的样式删掉了。DOM 还在、面板照常渲染，只是一条规则都不生效——看起来就是「界面乱了」，重启才好。
+
+修法是照宿主自己的写法（`@deepseek-ai/dsh-client-ui-*` 二十来个包全都这么干）：
+
+```js
+tag.dataset.plugin = 'dsh-skill-center'               // 归属，claimStyles / removeOwnedStyles 用它比对
+tag.dataset.pluginCss = 'dsh-skill-center/client.css' // 唯一标签 id，兼重复注入的守卫键
+```
+
+并且**永不 remove**：样式表属于文档，不属于某个 fiber，所以 disposer 是空函数——面板还挂着的时候把样式撤走，只会把它剥光。`docs/smoke-client.mjs` 的 `[stylesheet ownership]` 与 `[the stylesheet survives a second activation]` 两段就是守这三条，包括「再 `apply()` 一次不会多出一张样式表」。
+
 ### 视觉
 
 视觉上刻意贴着 DSH 自己的设计系统走，而不是自带一套配色：

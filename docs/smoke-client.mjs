@@ -267,6 +267,23 @@ globalThis.window = {
   removeEventListener: (type) => listeners.delete(type),
   location: { href: 'http://127.0.0.1:19387/' },
 }
+/**
+ * The document stub answers exactly the three `<style>` queries the host's own
+ * loader and hot reloader run. They are answered for real rather than with
+ * `null`, because "can another plugin take this tag away" is a question only
+ * the real answers can settle.
+ */
+const styleTags = () => styleElements
+const queryAllStyles = (selector) => {
+  if (selector === 'style:not([data-plugin])') return styleTags().filter((node) => node.attributes['data-plugin'] === undefined)
+  if (selector === 'style[data-plugin]') return styleTags().filter((node) => node.attributes['data-plugin'] !== undefined)
+  const byTagId = /^style\[data-plugin-css="(.*)"\]$/.exec(selector)
+  if (byTagId === null) return []
+  const wanted = JSON.parse(`"${byTagId[1]}"`)
+  return styleTags().filter((node) => node.attributes['data-plugin-css'] === wanted)
+}
+const queryOneStyle = (selector) => queryAllStyles(selector)[0] ?? null
+
 globalThis.document = {
   baseURI: 'http://127.0.0.1:19387/',
   head: {
@@ -289,7 +306,8 @@ globalThis.document = {
     if (tag === 'style') styles.push(node)
     return node
   },
-  querySelector: () => null,
+  querySelector: queryOneStyle,
+  querySelectorAll: queryAllStyles,
   addEventListener: () => {},
   removeEventListener: () => {},
 }
@@ -388,6 +406,26 @@ check('a <style> element was injected', styleNode !== undefined && styleNode.att
   JSON.stringify(styleNode?.attributes))
 check('css uses the harness theme tokens', typeof styleNode?.textContent === 'string' && styleNode.textContent.includes('--dsw-alias-bg-layer-2'),
   `${styleNode?.textContent?.length ?? 0} chars`)
+
+console.log('\n[stylesheet ownership]')
+// Two operations in the host decide whether this stylesheet survives a reload of
+// some OTHER plugin, and both of them match on attributes of the tag itself.
+check('the tag names the plugin that owns it', styleNode?.attributes['data-plugin'] === 'dsh-skill-center',
+  JSON.stringify(styleNode?.attributes))
+check('the tag carries the unique id the re-injection guard keys on',
+  typeof styleNode?.attributes['data-plugin-css'] === 'string' && styleNode.attributes['data-plugin-css'].length > 0,
+  styleNode?.attributes['data-plugin-css'])
+// `dsh-client-modules` hands every untagged <style> to whichever plugin
+// materializes next, and this bundle injects from apply() -- after its own
+// materialization -- so an untagged tag would be claimed by somebody else.
+const claimable = document.querySelectorAll('style:not([data-plugin])')
+check('the module loader cannot hand this tag to another plugin', !claimable.includes(styleNode),
+  `${claimable.length} claimable tag(s)`)
+// `dsh-client-hmr` deletes style[data-plugin=<id>] when <id> hot-reloads. Another
+// plugin's id must not match ours.
+const doomed = document.querySelectorAll('style[data-plugin]').filter((node) => node.attributes['data-plugin'] === 'some-other-plugin')
+check('another plugin hot-reloading leaves this stylesheet alone', !doomed.includes(styleNode),
+  `${doomed.length} tag(s) would be removed`)
 
 console.log('\n[slots]')
 const byName = (name) => slotRegistrations.filter((entry) => entry.meta.name === name)
@@ -723,6 +761,18 @@ if (typeof onKeyDown === 'function') {
   await settle()
   check('escape on a closed drawer is harmless', !drawerOpen())
 }
+
+console.log('\n[the stylesheet survives a second activation]')
+// The host re-applies the plugin on every hot reload of its own bundle. A guard
+// that does not work stacks one more copy of the whole stylesheet per reload.
+const styleTagsBeforeReapply = styleElements.length
+try {
+  exportsObject.apply(ctx)
+} catch (error) {
+  check('a second apply() does not throw', false, error.message)
+}
+check('a second activation injects no second stylesheet', styleElements.length === styleTagsBeforeReapply,
+  `${styleTagsBeforeReapply} -> ${styleElements.length}`)
 
 for (const cleanup of cleanups.splice(0, cleanups.length)) {
   try {
