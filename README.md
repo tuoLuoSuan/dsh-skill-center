@@ -1,6 +1,6 @@
 # 技能中心 · dsh-skill-center
 
-一个 [DeepSeek Harness](https://github.com/deepseek-ai) 插件：在 Web GUI 里浏览、搜索、预览并安装**全世界公开的 Agent Skills**。
+一个 [DeepSeek Harness](https://github.com/deepseek-ai) 插件，在侧边栏里搜技能，看清了再装。
 
 ```powershell
 dsh plugin --profile <你的 profile> add dsh-skill-center
@@ -13,23 +13,21 @@ dsh plugin --profile <你的 profile> add dsh-skill-center
 | | |
 | --- | --- |
 | ![同名冲突](docs/screenshots/conflict-dark.png) | ![本机导入](docs/screenshots/local-light.png) |
-| **装之前把四种坏法说清楚** — 占名、缺件、不完整、名字不合法，各配自己的后果与选项 | **把 DSH 看不见的技能导进来** — 扫描 Claude Code / Codex / Agents / Gemini 的目录 |
+| 占名、缺件、不完整、名字不合法：四种坏法各配自己的后果与选项 | 扫描 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来 |
 | ![已安装](docs/screenshots/installed-light.png) | ![深色主题](docs/screenshots/browse-dark.png) |
-| **装完之后看得见的状态** — 来路、更新检查与回收站 | **跟随 DSH 主题** — 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
+| 装完之后的状态：来路、更新检查、回收站 | 颜色全走 `--dsw-alias-*` 令牌，没有第二套样式表 |
 
-- **发现** — 聚合 5 个来源的技能目录，支持中英文关键词、分类、排序、分页
-- **已安装** — 直接读你本机的 `~/.dsh/skills`，显示每个技能的来源、文件数与校验结果
-- **本机** — 扫描 Claude Code / Codex / Agents / Gemini 的技能目录，把 DSH 看不见的技能导进来
-- **详情 / 预览** — 看仓库目录树、读 `SKILL.md` 原文、逐个文件预览，确认后再落地
-- **安装 / 删除** — 写入 `~/.dsh/skills/<name>/`，harness 的 chokidar 会立刻侦测到，**无需重启**
+面板分三块。**发现**聚合 5 个来源的技能目录，能按中英文关键词搜，也能按分类和 star 排序。**已安装**直接读你本机的 `~/.dsh/skills`，把每个技能的来源、文件数和校验结果列出来。**本机**扫的是 Claude Code / Codex / Agents / Gemini 的目录，把 DSH 看不见的技能导进来。
 
-三个入口共用同一份状态：侧边栏按钮、`shell.overlay` 抽屉、设置页里的内联分区。
+想看清楚再动手就进详情页：仓库目录树、`SKILL.md` 原文、逐个文件预览。确认后写到 `~/.dsh/skills/<name>/`，harness 的 chokidar 立刻侦测得到，不用重启。
+
+侧边栏按钮、`shell.overlay` 抽屉、设置页里的内联分区，三个入口共用同一份状态。
 
 ---
 
-## 为什么不是又一个「技能列表」
+## 装得上，不等于 harness 会认它
 
-技能**装得上**不等于 harness **会认它**。这个插件的大部分代码在处理两者之间的落差。
+这个插件大部分代码在处理这两者之间的落差。
 
 ### 装之前先告诉你它会怎么坏
 
